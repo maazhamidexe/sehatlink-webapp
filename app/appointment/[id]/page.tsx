@@ -6,7 +6,6 @@ import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft,
   Mic,
-  MicOff,
   Play,
   Square,
   Loader2,
@@ -17,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { supabase } from "@/lib/supabase"
 
 interface AppointmentData {

@@ -1,6 +1,4 @@
 ﻿'use client';
-
-import React from "react";
 import Section from "./Section";
 import { socials } from "../constants";
 import { brainwaveSymbol } from "../assets";
