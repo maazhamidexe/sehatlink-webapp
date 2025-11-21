@@ -83,8 +83,9 @@ export default function DoctorDashboard() {
               })
               
               if (doctorResponse.data.id || doctorResponse.data.doctor_id) {
-                doctorId = (doctorResponse.data.id || doctorResponse.data.doctor_id).toString()
-                localStorage.setItem("doctor_id", doctorId)
+                const id = (doctorResponse.data.id || doctorResponse.data.doctor_id).toString()
+                doctorId = id
+                localStorage.setItem("doctor_id", id)
               }
             } catch (apiError: any) {
               const email = localStorage.getItem("doctor_email")
@@ -96,8 +97,9 @@ export default function DoctorDashboard() {
                   .single()
                 
                 if (!doctorError && doctorData) {
-                  doctorId = doctorData.id.toString()
-                  localStorage.setItem("doctor_id", doctorId)
+                  const id = doctorData.id.toString()
+                  doctorId = id
+                  localStorage.setItem("doctor_id", id)
                 }
               }
             }
@@ -143,8 +145,9 @@ export default function DoctorDashboard() {
               })
               
               if (doctorResponse.data.id || doctorResponse.data.doctor_id) {
-                doctorId = (doctorResponse.data.id || doctorResponse.data.doctor_id).toString()
-                localStorage.setItem("doctor_id", doctorId)
+                const id = (doctorResponse.data.id || doctorResponse.data.doctor_id).toString()
+                doctorId = id
+                localStorage.setItem("doctor_id", id)
               }
             } catch (apiError: any) {
               const email = localStorage.getItem("doctor_email")
@@ -156,8 +159,9 @@ export default function DoctorDashboard() {
                   .single()
                 
                 if (!doctorError && doctorData) {
-                  doctorId = doctorData.id.toString()
-                  localStorage.setItem("doctor_id", doctorId)
+                  const id = doctorData.id.toString()
+                  doctorId = id
+                  localStorage.setItem("doctor_id", id)
                 }
               }
             }
