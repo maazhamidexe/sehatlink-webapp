@@ -6,8 +6,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    console.log('Attempting doctor login to:', `${API_BASE_URL}/doctor/login`);
+    console.log('=== DOCTOR LOGIN ATTEMPT ===');
+    console.log('Backend URL:', API_BASE_URL);
+    console.log('Full endpoint:', `${API_BASE_URL}/doctor/login`);
     console.log('Request body:', JSON.stringify(body, null, 2));
+    console.log('Environment:', process.env.NODE_ENV);
     
     const response = await fetch(`${API_BASE_URL}/doctor/login`, {
       method: 'POST',
@@ -31,7 +34,9 @@ export async function POST(request: NextRequest) {
         { 
           detail: `Backend returned non-JSON response. Status: ${response.status}. Content-Type: ${contentType}. This usually means the endpoint doesn't exist or there's a server error.`,
           status: response.status,
-          endpoint: `${API_BASE_URL}/doctor/login`
+          endpoint: `${API_BASE_URL}/doctor/login`,
+          backendUrl: API_BASE_URL,
+          responsePreview: text.substring(0, 200)
         },
         { status: 502 }
       );
@@ -41,19 +46,28 @@ export async function POST(request: NextRequest) {
     console.log('Response data:', data);
 
     if (!response.ok) {
+      console.error('Backend returned error:', data);
       return NextResponse.json(data, { status: response.status });
     }
 
+    console.log('Login successful!');
     return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
-    console.error('Error in doctor login proxy:', error);
+    console.error('=== ERROR IN DOCTOR LOGIN PROXY ===');
+    console.error('Error name:', error.name);
     console.error('Error message:', error.message);
+    console.error('Error cause:', error.cause);
     console.error('Error stack:', error.stack);
+    console.error('API_BASE_URL:', API_BASE_URL);
+    
     return NextResponse.json(
       { 
         detail: `Failed to connect to authentication service: ${error.message}`,
         endpoint: `${API_BASE_URL}/doctor/login`,
-        suggestion: 'Please verify the backend API is running and the endpoint exists'
+        backendUrl: API_BASE_URL,
+        errorType: error.name,
+        suggestion: 'Please verify the backend API is running and accessible. Check NEXT_PUBLIC_API_URL environment variable in Vercel settings.',
+        envSet: !!process.env.NEXT_PUBLIC_API_URL
       },
       { status: 500 }
     );

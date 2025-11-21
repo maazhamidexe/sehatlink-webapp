@@ -78,7 +78,7 @@ export default function DoctorAuthPage() {
 
   const fetchHospitals = async () => {
     try {
-      const response = await axios.get("/api/hospitals/list")
+      const response = await axios.get("/api/proxy/hospitals/list")
       setHospitals(response.data)
     } catch (err) {
       console.error("Failed to fetch hospitals:", err)
@@ -120,8 +120,12 @@ export default function DoctorAuthPage() {
       
       router.push("/doctor/dashboard")
     } catch (err: any) {
-      console.error(err)
-      const errorMsg = err.response?.data?.detail || err.response?.data?.suggestion || "Login failed"
+      console.error("Login error:", err)
+      console.error("Error response data:", err.response?.data)
+      console.error("Error status:", err.response?.status)
+      console.error("Full error object:", JSON.stringify(err.response?.data, null, 2))
+      
+      const errorMsg = err.response?.data?.detail || err.response?.data?.suggestion || err.response?.data?.endpoint || err.message || "Login failed"
       setError(errorMsg)
     } finally {
       setLoading(false)
