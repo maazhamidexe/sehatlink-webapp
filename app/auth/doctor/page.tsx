@@ -104,6 +104,20 @@ export default function DoctorAuthPage() {
       localStorage.setItem("doctor_token", response.data.access_token)
       localStorage.setItem("user_type", "doctor")
       
+      // Store doctor_id if provided in the response
+      if (response.data.doctor_id) {
+        localStorage.setItem("doctor_id", response.data.doctor_id.toString())
+      } else if (response.data.user_id) {
+        localStorage.setItem("doctor_id", response.data.user_id.toString())
+      } else if (response.data.id) {
+        localStorage.setItem("doctor_id", response.data.id.toString())
+      }
+      
+      // Store doctor email for fallback lookup
+      if (loginEmail) {
+        localStorage.setItem("doctor_email", loginEmail)
+      }
+      
       router.push("/doctor/dashboard")
     } catch (err: any) {
       console.error(err)

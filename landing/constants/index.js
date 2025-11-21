@@ -106,8 +106,8 @@ export const brainwaveServicesIcons = [
 export const roadmap = [
   {
     id: "0",
-    title: "Multi-Agent Healthcare System",
-    text: "Launched our revolutionary agentic AI platform with specialized agents for triage, eligibility checking, symptom analysis, and appointments.",
+    title: "AI Voice Agent Calling to Book your Appointment",
+    text: "Revolutionary agentic AI platform with specialized agents for calling clinics for you to call clinics for you to book the appointment!",
     date: "Q4 2024",
     status: "done",
     imageUrl: roadmap1,

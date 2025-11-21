@@ -11,6 +11,7 @@ A modern healthcare platform built with Next.js featuring AI-powered appointment
 - **Beautiful UI**: Modern, responsive interface with Framer Motion animations
 - **Medicine Reminders**: Track and manage medications
 - **Agent Visualization**: Multi-agent health assistant system
+- **Disease Distribution Map**: Real-time disease tracking across Pakistan with Google Maps integration
 
 ## 🚀 Quick Start
 
@@ -30,13 +31,14 @@ See [QUICK_START.md](./QUICK_START.md) for a 5-minute setup guide.
 npm install
 ```
 
-2. Configure environment variables (see [ENV_SETUP.md](./ENV_SETUP.md)):
+2. Configure environment variables (see [ENV_SETUP.md](./ENV_SETUP.md) and [DISEASE_MAP_SETUP.md](./DISEASE_MAP_SETUP.md)):
 
 Create a `.env.local` file:
 
 ```bash
 DEEPGRAM_API_KEY=your_deepgram_key_here
 OPENAI_API_KEY=your_openai_key_here
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 ```
 
 3. Run the development server:
@@ -51,6 +53,7 @@ npm run dev
 
 - **[QUICK_START.md](./QUICK_START.md)**: Get started in 5 minutes
 - **[APPOINTMENT_SYSTEM.md](./APPOINTMENT_SYSTEM.md)**: Comprehensive appointment system documentation
+- **[DISEASE_MAP_SETUP.md](./DISEASE_MAP_SETUP.md)**: Disease map setup and configuration guide
 - **[ENV_SETUP.md](./ENV_SETUP.md)**: Environment setup instructions
 - **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)**: Developer reference and API documentation
 - **[SYSTEM_FLOW.md](./SYSTEM_FLOW.md)**: Visual system flow and architecture diagrams
@@ -68,12 +71,24 @@ The appointment system allows doctors to:
 
 For detailed information, see [APPOINTMENT_SYSTEM.md](./APPOINTMENT_SYSTEM.md).
 
+## 🗺️ Disease Distribution Map
+
+The doctor dashboard includes a real-time disease tracking map that:
+1. Displays a map of Pakistan using Google Maps Static API
+2. Shows markers for disease reports from different cities
+3. Uses different colors for different disease types
+4. Provides statistics and recent reports table
+5. Fetches data from Supabase `disease_report` table
+
+For setup instructions, see [DISEASE_MAP_SETUP.md](./DISEASE_MAP_SETUP.md).
+
 ## ⚙️ Technology Stack
 
 - **Frontend**: Next.js 16, React 19, TypeScript
 - **Styling**: Tailwind CSS, Shadcn UI, Radix UI
 - **Animations**: Framer Motion
 - **Database**: Supabase (PostgreSQL)
+- **Maps**: Google Maps Static API
 - **STT**: Deepgram API
 - **AI**: OpenAI GPT-4
 - **Audio**: MediaRecorder API

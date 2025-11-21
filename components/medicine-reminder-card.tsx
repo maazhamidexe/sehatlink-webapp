@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Calendar, Pill, CheckCircle2, Circle, X, Clock, Check, XCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,13 +8,14 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface Medicine {
   id: number
   name: string
   dose: string
   frequency: string
-  duration: string
+  duration: number | null
 }
 
 interface MedicineWithStatus extends Medicine {
@@ -22,8 +23,6 @@ interface MedicineWithStatus extends Medicine {
   notTaken?: boolean
   lateTaken?: string | null
 }
-
-const USER_ID = 1 // Hardcoded user_id
 
 export function MedicineReminderCard() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
@@ -34,16 +33,23 @@ export function MedicineReminderCard() {
   const [currentSurveyIndex, setCurrentSurveyIndex] = useState(0)
   const [surveyLoading, setSurveyLoading] = useState(false)
   const [surveyComplete, setSurveyComplete] = useState(false)
+  const { userId, loading: authLoading } = useAuth()
+
+  const numericUserId = useMemo(() => {
+    if (!userId) return null
+    const parsed = Number(userId)
+    return Number.isFinite(parsed) ? parsed : null
+  }, [userId])
 
   useEffect(() => {
-    if (selectedDate) {
-      fetchMedicinesForDate(selectedDate)
-    } else {
+    if (!selectedDate || !numericUserId) {
       setMedicines([])
+      return
     }
-  }, [selectedDate])
+    fetchMedicinesForDate(selectedDate, numericUserId)
+  }, [selectedDate, numericUserId])
 
-  const fetchMedicinesForDate = async (date: Date) => {
+  const fetchMedicinesForDate = async (date: Date, userId: number) => {
     setLoading(true)
     try {
       const dateString = date.toISOString().split('T')[0]
@@ -62,20 +68,28 @@ export function MedicineReminderCard() {
           )
         `)
         .eq('date_filled', dateString)
-        .eq('user_id', USER_ID)
+        .eq('user_id', userId)
 
       if (routineError || !dailyRoutineData || dailyRoutineData.length === 0) {
         // If no daily_routine data, fetch all medicines from medicine_data
         const { data: medicineData, error: medicineError } = await supabase
           .from('medicine_data')
           .select('*')
-          .eq('user_id', USER_ID)
+          .eq('user_id', userId)
 
         if (medicineError) {
           console.error('Error fetching medicines:', medicineError)
           setMedicines([])
         } else {
-          setMedicines(medicineData || [])
+          const normalizedMedicines = (medicineData || []).map((med: any) => ({
+            ...med,
+            duration: typeof med.duration === 'number'
+              ? med.duration
+              : med.duration
+              ? Number(med.duration)
+              : null,
+          }))
+          setMedicines(normalizedMedicines)
         }
       } else {
         // Map the joined data from daily_routine
@@ -83,6 +97,11 @@ export function MedicineReminderCard() {
           .filter((routine: any) => routine.medicine_data) // Filter out null medicine_data
           .map((routine: any) => ({
             ...routine.medicine_data,
+            duration: typeof routine.medicine_data.duration === 'number'
+              ? routine.medicine_data.duration
+              : routine.medicine_data.duration
+              ? Number(routine.medicine_data.duration)
+              : null,
             taken: routine.taken,
             notTaken: routine.not_taken,
             lateTaken: routine.late_taken,
@@ -98,7 +117,7 @@ export function MedicineReminderCard() {
   }
 
   const initiateSurvey = async () => {
-    if (!selectedDate) return
+    if (!selectedDate || !numericUserId) return
 
     setSurveyLoading(true)
     try {
@@ -108,7 +127,7 @@ export function MedicineReminderCard() {
       const { data: medicineData, error: medicineError } = await supabase
         .from('medicine_data')
         .select('*')
-        .eq('user_id', USER_ID)
+        .eq('user_id', numericUserId)
 
       if (medicineError) {
         console.error('Error fetching medicines for survey:', medicineError)
@@ -121,7 +140,7 @@ export function MedicineReminderCard() {
         .from('daily_routine')
         .select('medicine_id')
         .eq('date_filled', dateString)
-        .eq('user_id', USER_ID)
+        .eq('user_id', numericUserId)
 
       const existingMedicineIds = new Set((existingRoutines || []).map((r: any) => r.medicine_id))
       
@@ -136,7 +155,16 @@ export function MedicineReminderCard() {
         return
       }
 
-      setSurveyMedicines(medicinesToSurvey)
+      const normalizedSurveyMedicines = medicinesToSurvey.map((med: any) => ({
+        ...med,
+        duration: typeof med.duration === 'number'
+          ? med.duration
+          : med.duration
+          ? Number(med.duration)
+          : null,
+      }))
+
+      setSurveyMedicines(normalizedSurveyMedicines)
       setCurrentSurveyIndex(0)
       setSurveyComplete(false)
       setShowSurvey(true)
@@ -148,7 +176,7 @@ export function MedicineReminderCard() {
   }
 
   const handleSurveyResponse = async (response: 'taken' | 'not_taken' | 'late') => {
-    if (currentSurveyIndex >= surveyMedicines.length) return
+    if (currentSurveyIndex >= surveyMedicines.length || !numericUserId) return
 
     setSurveyLoading(true)
     try {
@@ -157,7 +185,7 @@ export function MedicineReminderCard() {
       const currentTime = new Date().toTimeString().split(' ')[0] // HH:MM:SS format
 
       let insertData: any = {
-        user_id: USER_ID,
+        user_id: userId,
         medicine_id: currentMedicine.id,
         date_filled: dateString,
       }
@@ -194,7 +222,9 @@ export function MedicineReminderCard() {
         // Survey complete
         setSurveyComplete(true)
         // Refresh medicines to show updated status
-        await fetchMedicinesForDate(selectedDate!)
+        if (numericUserId) {
+          await fetchMedicinesForDate(selectedDate!, numericUserId)
+        }
       }
     } catch (error) {
       console.error('Error handling survey response:', error)
@@ -209,13 +239,25 @@ export function MedicineReminderCard() {
     setSurveyMedicines([])
     setCurrentSurveyIndex(0)
     setSurveyComplete(false)
-    if (selectedDate) {
-      fetchMedicinesForDate(selectedDate)
+    if (selectedDate && numericUserId) {
+      fetchMedicinesForDate(selectedDate, numericUserId)
     }
   }
 
   const isToday = selectedDate && 
     selectedDate.toDateString() === new Date().toDateString()
+
+  const canInitiateSurvey = Boolean(isToday && medicines.length > 0 && numericUserId)
+
+  const formatDuration = (duration: number | null | undefined) => {
+    if (duration === null || duration === undefined || Number.isNaN(duration)) {
+      return 'N/A'
+    }
+
+    const rounded = Math.round(duration)
+    const unit = rounded === 1 ? 'day' : 'days'
+    return `${rounded} ${unit}`
+  }
 
   return (
     <>
@@ -227,104 +269,117 @@ export function MedicineReminderCard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <CalendarComponent
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              className="rounded-md border-0 bg-transparent"
-            />
+          {authLoading ? (
+            <div className="py-10 text-center text-sm text-n-2">
+              Loading your account...
+            </div>
+          ) : !numericUserId ? (
+            <div className="rounded-lg border border-dashed border-n-6 bg-n-9/40 backdrop-blur p-6 text-center">
+              <Pill className="mx-auto h-8 w-8 text-n-2" />
+              <p className="mt-2 text-sm text-n-2">
+                Log in to view your medicine reminders.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <CalendarComponent
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                className="rounded-md border-0 bg-transparent"
+              />
 
-            {/* Survey Button - Only show for today */}
-            {isToday && medicines.length > 0 && (
-              <Button
-                onClick={initiateSurvey}
-                disabled={surveyLoading}
-                className="w-full bg-conic-gradient text-n-8 hover:opacity-90 font-code font-bold uppercase tracking-wider"
-              >
-                {surveyLoading ? 'Loading...' : 'Initiate Survey for Today'}
-              </Button>
-            )}
+              {/* Survey Button - Only show for today */}
+              {canInitiateSurvey && (
+                <Button
+                  onClick={initiateSurvey}
+                  disabled={surveyLoading}
+                  className="w-full bg-conic-gradient text-n-8 hover:opacity-90 font-code font-bold uppercase tracking-wider"
+                >
+                  {surveyLoading ? 'Loading...' : 'Initiate Survey for Today'}
+                </Button>
+              )}
 
-            {/* Medicine Card - Shows when a date is selected */}
-            {selectedDate && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="rounded-lg border border-n-6 bg-n-9/40 backdrop-blur p-4"
-              >
-                <h3 className="mb-4 text-sm font-semibold text-n-1">
-                  {selectedDate.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </h3>
+              {/* Medicine Card - Shows when a date is selected */}
+              {selectedDate && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="rounded-lg border border-n-6 bg-n-9/40 backdrop-blur p-4"
+                >
+                  <h3 className="mb-4 text-sm font-semibold text-n-1">
+                    {selectedDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </h3>
 
-                {loading ? (
-                  <div className="text-center py-4">
-                    <span className="text-sm text-n-2">Loading medicines...</span>
-                  </div>
-                ) : medicines.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-n-6 bg-n-9/40 backdrop-blur p-6 text-center">
-                    <Pill className="mx-auto h-8 w-8 text-n-2" />
-                    <p className="mt-2 text-sm text-n-2">
-                      No medicines scheduled for this day
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {medicines.map((medicine, index) => (
-                      <motion.div
-                        key={medicine.id}
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="flex items-start gap-3 rounded-lg border border-n-6 bg-n-9/40 backdrop-blur p-4"
-                      >
-                        <div className="mt-0.5">
-                          {medicine.taken ? (
-                            <CheckCircle2 className="h-5 w-5 text-color-4" />
-                          ) : (
-                            <Circle className="h-5 w-5 text-n-2" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-sm font-semibold text-n-1">
-                                {medicine.name}
-                              </h4>
-                              <div className="mt-2 space-y-1 text-sm text-n-2">
-                                <p>
-                                  <span className="font-medium">Frequency:</span> {medicine.frequency || 'N/A'}
-                                </p>
-                                <p>
-                                  <span className="font-medium">Duration:</span> {medicine.duration || 'N/A'}
-                                </p>
+                  {loading ? (
+                    <div className="text-center py-4">
+                      <span className="text-sm text-n-2">Loading medicines...</span>
+                    </div>
+                  ) : medicines.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-n-6 bg-n-9/40 backdrop-blur p-6 text-center">
+                      <Pill className="mx-auto h-8 w-8 text-n-2" />
+                      <p className="mt-2 text-sm text-n-2">
+                        No medicines scheduled for this day
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {medicines.map((medicine, index) => (
+                        <motion.div
+                          key={medicine.id}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="flex items-start gap-3 rounded-lg border border-n-6 bg-n-9/40 backdrop-blur p-4"
+                        >
+                          <div className="mt-0.5">
+                            {medicine.taken ? (
+                              <CheckCircle2 className="h-5 w-5 text-color-4" />
+                            ) : (
+                              <Circle className="h-5 w-5 text-n-2" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-sm font-semibold text-n-1">
+                                  {medicine.name}
+                                </h4>
+                                <div className="mt-2 space-y-1 text-sm text-n-2">
+                                  <p>
+                                    <span className="font-medium">Frequency:</span> {medicine.frequency || 'N/A'}
+                                  </p>
+                                  <p>
+                                    <span className="font-medium">Duration:</span> {formatDuration(medicine.duration)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                {medicine.taken && (
+                                  <Badge className="bg-color-4 text-n-8 text-xs px-2 py-0.5">
+                                    {medicine.lateTaken ? 'Taken Late' : 'Taken'}
+                                  </Badge>
+                                )}
+                                {medicine.notTaken && (
+                                  <Badge className="bg-color-3 text-n-1 text-xs px-2 py-0.5">Missed</Badge>
+                                )}
                               </div>
                             </div>
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              {medicine.taken && (
-                                <Badge className="bg-color-4 text-n-8 text-xs px-2 py-0.5">
-                                  {medicine.lateTaken ? 'Taken Late' : 'Taken'}
-                                </Badge>
-                              )}
-                              {medicine.notTaken && (
-                                <Badge className="bg-color-3 text-n-1 text-xs px-2 py-0.5">Missed</Badge>
-                              )}
-                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -398,7 +453,7 @@ export function MedicineReminderCard() {
                             <span className="font-medium">Frequency:</span> {surveyMedicines[currentSurveyIndex].frequency || 'N/A'}
                           </p>
                           <p>
-                            <span className="font-medium">Duration:</span> {surveyMedicines[currentSurveyIndex].duration || 'N/A'}
+                            <span className="font-medium">Duration:</span> {formatDuration(surveyMedicines[currentSurveyIndex].duration)}
                           </p>
                         </div>
                       </div>

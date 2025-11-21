@@ -31,51 +31,63 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are a medical transcription assistant. Extract structured data from the appointment transcription.
-Return a JSON object with the following structure:
+          content: `You are a medical transcription assistant. Your task is to:
+1. First, translate the transcription from Urdu (or any other language) to English if needed
+2. Then extract structured medical data from the English translation
+
+The transcription may be in Urdu, English, or a mix of both. Always translate any Urdu text to English first, then extract the structured data.
+
+Return a JSON object matching the appointments table schema in Supabase:
 {
-  "chief_complaint": "Main reason for visit",
+  "chief_complaint": "Main reason for visit (TEXT field, in English)",
   "symptoms": [
     {
-      "name": "symptom name",
+      "name": "symptom name (in English)",
       "severity": "mild/moderate/severe",
-      "duration": "duration description",
-      "notes": "additional notes"
+      "duration": "duration description (in English)",
+      "notes": "additional notes (in English)"
     }
   ],
-  "diagnosis": "Final diagnosis or impression",
+  "diagnosis": "Final diagnosis or impression (TEXT field, in English)",
   "prescription": [
     {
-      "medication": "medication name",
-      "dosage": "dosage amount",
-      "frequency": "how often",
-      "duration": "how long",
-      "instructions": "special instructions"
+      "medication": "medication name (in English)",
+      "dosage": "dosage amount (in English)",
+      "frequency": "how often (in English)",
+      "duration": "how long (in English)",
+      "instructions": "special instructions (in English)"
     }
   ],
   "lab_tests": [
     {
-      "test_name": "name of test",
-      "reason": "reason for test"
+      "test_name": "name of test (in English)",
+      "reason": "reason for test (in English)"
     }
   ],
   "vital_signs": {
-    "blood_pressure": "BP reading",
-    "heart_rate": "HR reading",
-    "temperature": "temp reading",
-    "weight": "weight",
-    "height": "height"
+    "blood_pressure": "BP reading or null",
+    "heart_rate": "HR reading or null",
+    "temperature": "temp reading or null",
+    "weight": "weight or null",
+    "height": "height or null"
   },
-  "examination_findings": "Physical examination findings and observations",
+  "examination_findings": "Physical examination findings and observations (TEXT field, in English)",
   "follow_up_date": "suggested follow-up date in YYYY-MM-DD format or null",
-  "follow_up_notes": "follow-up instructions and notes"
+  "follow_up_notes": "follow-up instructions and notes (TEXT field, in English)"
 }
 
-Extract only the information that is explicitly mentioned. Use null for missing data.`
+Important: 
+- Translate all Urdu text to English before extracting data
+- All text fields must be in English
+- symptoms, prescription, lab_tests, and vital_signs are JSONB fields - return as arrays/objects
+- All text fields (chief_complaint, diagnosis, examination_findings, follow_up_notes) should be strings or null
+- Extract only the information that is explicitly mentioned in the transcription
+- Use null for missing data, not empty strings or empty arrays
+- Preserve medical terminology and convert it to standard English medical terms`
         },
         {
           role: 'user',
-          content: `Extract structured appointment data from this transcription:\n\n${transcript}`
+          content: `Translate the following transcription to English (if it contains Urdu or other languages), then extract structured appointment data:\n\n${transcript}`
         }
       ],
       response_format: { type: 'json_object' },

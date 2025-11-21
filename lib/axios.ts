@@ -1,14 +1,19 @@
 import axios, { AxiosInstance } from 'axios'
 import https from 'https'
 
-// Backend base URL
-const BACKEND_URL = 'https://34.42.175.232'
+// Backend base URL - use environment variable or default to localhost:8000
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
-// Create axios instance for server-side requests (can ignore SSL)
+// Check if URL is HTTPS to determine if we need SSL agent
+const isHttps = BACKEND_URL.startsWith('https://')
+
+// Create axios instance for server-side requests
 export const serverAxios: AxiosInstance = axios.create({
   baseURL: BACKEND_URL,
-  httpsAgent: new https.Agent({
-    rejectUnauthorized: false // Ignore SSL certificate errors
+  ...(isHttps && {
+    httpsAgent: new https.Agent({
+      rejectUnauthorized: false // Ignore SSL certificate errors for HTTPS
+    })
   }),
   timeout: 30000,
 })

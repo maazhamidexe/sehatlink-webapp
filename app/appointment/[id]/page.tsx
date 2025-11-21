@@ -48,6 +48,10 @@ export default function AppointmentPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const transcriptionIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const activeTranscriptionRef = useRef<Promise<void> | null>(null)
+  const accumulatedChunksRef = useRef<Blob[]>([]) // For accumulating audio chunks
+  const isRecordingRef = useRef<boolean>(false) // Ref for recording state in intervals
 
   // Fetch appointment data from Supabase
   useEffect(() => {
@@ -108,6 +112,7 @@ export default function AppointmentPage() {
   const startRecording = async () => {
     try {
       setError(null)
+      setTranscript("") // Clear previous transcript
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
 
@@ -117,23 +122,62 @@ export default function AppointmentPage() {
       
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
+      accumulatedChunksRef.current = []
 
+      // Handle audio chunks for real-time transcription
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data)
+          accumulatedChunksRef.current.push(event.data)
         }
       }
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        await transcribeAudio(audioBlob)
+        // Clear transcription interval
+        if (transcriptionIntervalRef.current) {
+          clearInterval(transcriptionIntervalRef.current)
+          transcriptionIntervalRef.current = null
+        }
+        
+        // Wait for any pending transcription
+        if (activeTranscriptionRef.current) {
+          await activeTranscriptionRef.current
+        }
+        
+        // Final transcription of complete audio to ensure accuracy
+        const finalBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        if (finalBlob.size > 0) {
+          console.log('Performing final transcription of complete audio')
+          await transcribeAudioChunk(finalBlob)
+        }
+        
+        console.log('Recording stopped, final transcript length:', transcript.length)
       }
 
-      mediaRecorder.start()
+      // Start recording with 3 second chunks for real-time transcription
+      // This will trigger ondataavailable every 3 seconds
+      mediaRecorder.start(3000)
       setIsRecording(true)
+      isRecordingRef.current = true
       
-      // Simulate interim transcripts (in production, use Deepgram's live transcription)
-      simulateInterimTranscripts()
+      console.log('Recording started with real-time transcription')
+      
+      // Set up periodic transcription while recording
+      // Transcribe accumulated audio every 3 seconds
+      transcriptionIntervalRef.current = setInterval(() => {
+        if (isRecordingRef.current && accumulatedChunksRef.current.length > 0 && !activeTranscriptionRef.current) {
+          // Create a blob from accumulated chunks
+          const accumulatedBlob = new Blob(accumulatedChunksRef.current, { type: 'audio/webm' })
+          
+          // Only transcribe if blob is large enough (at least 1KB)
+          if (accumulatedBlob.size > 1024) {
+            activeTranscriptionRef.current = transcribeAudioChunk(accumulatedBlob)
+              .finally(() => {
+                activeTranscriptionRef.current = null
+              })
+          }
+        }
+      }, 3000) // Transcribe every 3 seconds
 
     } catch (err) {
       console.error('Error starting recording:', err)
@@ -141,10 +185,29 @@ export default function AppointmentPage() {
     }
   }
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Stop the interval first
+      if (transcriptionIntervalRef.current) {
+        clearInterval(transcriptionIntervalRef.current)
+        transcriptionIntervalRef.current = null
+      }
+      
+      isRecordingRef.current = false
       mediaRecorderRef.current.stop()
       setIsRecording(false)
+      
+      // Wait for any pending transcription chunks
+      if (activeTranscriptionRef.current) {
+        await activeTranscriptionRef.current
+      }
+      
+      // Extract structured data from the accumulated transcript
+      if (transcript.trim()) {
+        setIsProcessing(true)
+        await extractAppointmentData(transcript)
+        setIsProcessing(false)
+      }
       
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
@@ -152,34 +215,22 @@ export default function AppointmentPage() {
     }
   }
 
-  const simulateInterimTranscripts = () => {
-    // Simulate real-time transcription updates
-    const samplePhrases = [
-      "Patient presents with...",
-      "Chief complaint is chest pain...",
-      "Symptoms started two days ago...",
-      "Blood pressure is 120/80...",
-      "Prescribed medication..."
-    ]
-    
-    let index = 0
-    const interval = setInterval(() => {
-      if (index < samplePhrases.length && isRecording) {
-        setInterimTranscript(samplePhrases[index])
-        index++
-      }
-    }, 3000)
+  // Removed simulateInterimTranscripts - now using real streaming transcription
 
-    return () => clearInterval(interval)
-  }
-
-  const transcribeAudio = async (audioBlob: Blob) => {
+  // Transcribe accumulated audio chunks (for real-time transcription during recording)
+  const transcribeAudioChunk = async (audioChunk: Blob) => {
     try {
-      setIsProcessing(true)
-      setError(null)
+      console.log('Transcribing accumulated chunk, size:', audioChunk.size)
+      
+      if (audioChunk.size === 0) {
+        return
+      }
 
+      // Only transcribe new audio (skip already transcribed portion)
+      // We'll use the accumulated blob which includes all audio so far
       const formData = new FormData()
-      formData.append('audio', audioBlob, 'recording.webm')
+      formData.append('audio', audioChunk, 'chunk.webm')
+      formData.append('stream', 'true')
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',
@@ -187,16 +238,190 @@ export default function AppointmentPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Transcription failed')
+        console.error('Chunk transcription failed:', response.status)
+        return
       }
 
-      const result = await response.json()
-      const fullTranscript = transcript + " " + result.transcript
-      setTranscript(fullTranscript)
-      setInterimTranscript("")
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
 
-      // Extract structured data from transcript
-      await extractAppointmentData(fullTranscript)
+      if (!reader) {
+        return
+      }
+
+      let buffer = ''
+      let fullChunkTranscript = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          
+          try {
+            const data = JSON.parse(line)
+            
+            if (data.type === 'delta') {
+              fullChunkTranscript += data.delta
+            } else if (data.type === 'done') {
+              fullChunkTranscript = data.transcript || fullChunkTranscript
+            }
+          } catch (parseError) {
+            // Ignore parsing errors
+          }
+        }
+      }
+
+      // Process final buffer
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim())
+          if (data.type === 'done' && data.transcript) {
+            fullChunkTranscript = data.transcript
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+
+      // Update transcript with full accumulated transcript
+      // Since we're transcribing accumulated audio, the result is the full transcript
+      // We replace the transcript each time to get the most complete version
+      if (fullChunkTranscript) {
+        setTranscript(fullChunkTranscript)
+        console.log('Updated transcript length:', fullChunkTranscript.length)
+      }
+
+    } catch (err) {
+      console.error('Error transcribing chunk:', err)
+      // Don't show error to user for chunk transcription failures
+    }
+  }
+
+  // Transcribe complete audio (for final transcription after recording stops)
+  const transcribeAudio = async (audioBlob: Blob) => {
+    try {
+      setIsProcessing(true)
+      setError(null)
+      setInterimTranscript("")
+      let accumulatedTranscript = transcript ? transcript + " " : ""
+
+      console.log('Starting transcription, audio size:', audioBlob.size)
+
+      const formData = new FormData()
+      formData.append('audio', audioBlob, 'recording.webm')
+      formData.append('stream', 'true') // Enable streaming
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData
+      })
+
+      console.log('Transcription response status:', response.status, 'Content-Type:', response.headers.get('content-type'))
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Transcription failed:', errorText)
+        throw new Error('Transcription failed: ' + errorText)
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      console.log('Reading stream...')
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          console.log('Stream reading done')
+          break
+        }
+
+        // Decode chunk and add to buffer
+        const chunk = decoder.decode(value, { stream: true })
+        console.log('Received chunk:', chunk.substring(0, 100))
+        buffer += chunk
+        
+        // Process complete lines from buffer
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmedLine = line.trim()
+          if (!trimmedLine) continue
+          
+          try {
+            const data = JSON.parse(trimmedLine)
+            console.log('Parsed data:', data.type, data.delta ? `delta length: ${data.delta.length}` : '')
+            
+            if (data.type === 'delta') {
+              // Update live transcription
+              accumulatedTranscript += data.delta
+              console.log('Updating transcript, current length:', accumulatedTranscript.length)
+              setTranscript(accumulatedTranscript)
+              setInterimTranscript("")
+            } else if (data.type === 'done') {
+              // Transcription complete
+              const fullTranscript = data.transcript || accumulatedTranscript
+              console.log('Transcription done, final length:', fullTranscript.length)
+              setTranscript(fullTranscript)
+              setInterimTranscript("")
+              
+              // Extract structured data from complete transcript
+              await extractAppointmentData(fullTranscript)
+              setIsProcessing(false)
+              return
+            } else if (data.type === 'error') {
+              console.error('Transcription error from server:', data.error)
+              throw new Error(data.error || 'Transcription error')
+            }
+          } catch (parseError) {
+            // If parsing fails, it might be a partial JSON - log but don't break
+            console.warn('Error parsing stream data:', parseError, 'Line:', trimmedLine.substring(0, 100))
+          }
+        }
+      }
+
+      // Process any remaining buffer content
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim())
+          console.log('Processing final buffer:', data.type)
+          if (data.type === 'done') {
+            const fullTranscript = data.transcript || accumulatedTranscript
+            setTranscript(fullTranscript)
+            await extractAppointmentData(fullTranscript)
+            setIsProcessing(false)
+            return
+          }
+        } catch (e) {
+          console.warn('Error parsing final buffer:', e)
+        }
+      }
+
+      // If we exit the loop without a done event, use accumulated transcript
+      if (accumulatedTranscript.trim()) {
+        console.log('Finalizing transcript from accumulated text')
+        // Don't extract data here if we already have real-time transcript
+        // We'll extract after recording stops if needed
+      } else {
+        console.warn('No transcript accumulated from final transcription')
+      }
+      setIsProcessing(false)
 
     } catch (err) {
       console.error('Transcription error:', err)
@@ -492,19 +717,37 @@ export default function AppointmentPage() {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-96 w-full rounded-md border border-border bg-muted/50 p-4">
-                    <div className="space-y-4 text-sm">
+                    <div className="space-y-4">
                       {transcript && (
-                        <p className="leading-relaxed text-card-foreground whitespace-pre-wrap">
+                        <p 
+                          className="leading-relaxed text-card-foreground whitespace-pre-wrap"
+                          style={{
+                            fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Al Qalam', 'Jameel Noori Nastaleeq', 'Segoe UI', 'Tahoma', 'Arial', sans-serif",
+                            fontSize: '1.375rem',
+                            lineHeight: '2',
+                            fontWeight: '400',
+                            letterSpacing: '0.01em'
+                          }}
+                        >
                           {transcript}
                         </p>
                       )}
                       {interimTranscript && (
-                        <p className="leading-relaxed text-muted-foreground italic">
+                        <p 
+                          className="leading-relaxed text-muted-foreground italic"
+                          style={{
+                            fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', 'Al Qalam', 'Jameel Noori Nastaleeq', 'Segoe UI', 'Tahoma', 'Arial', sans-serif",
+                            fontSize: '1.375rem',
+                            lineHeight: '2',
+                            fontWeight: '400',
+                            letterSpacing: '0.01em'
+                          }}
+                        >
                           {interimTranscript}
                         </p>
                       )}
                       {!transcript && !interimTranscript && (
-                        <p className="text-center text-muted-foreground">
+                        <p className="text-center text-muted-foreground text-lg">
                           Start recording to see transcription...
                         </p>
                       )}
