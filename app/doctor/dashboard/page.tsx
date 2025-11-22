@@ -729,7 +729,7 @@ export default function DoctorDashboard() {
                             <p className="text-sm text-n-1">
                               {selectedAppointment.appointment_date 
                                 ? `Time: ${selectedAppointment.appointment_time}`
-                                : formatDateTime(selectedAppointment.appointment_time)
+                                : formatDateTime(selectedAppointment)
                               }
                             </p>
                           )}
