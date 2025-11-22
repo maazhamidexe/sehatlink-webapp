@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { curve, heroBackground, robot } from "../assets";
 import Button from "./Button";
 import Section from "./Section";
@@ -32,12 +33,13 @@ const Hero = () => {
             Revolutionary Healthcare Powered by&nbsp;AI&nbsp;Agents with {` `}
             <span className="inline-block relative">
               Sehat Link{" "}
-              <img
+              <Image
                 src={curve}
                 className="absolute top-full left-0 w-full xl:-mt-2"
                 width={624}
                 height={28}
                 alt="Curve"
+                priority
               />
             </span>
           </h1>
@@ -62,12 +64,15 @@ const Hero = () => {
               <div className="h-[1.4rem] bg-n-10 rounded-t-[0.9rem]" />
 
               <div className="aspect-[33/40] rounded-b-[0.9rem] overflow-hidden md:aspect-[688/490] lg:aspect-[1024/490]">
-                <img
+                <Image
                   src={robot}
                   className="w-full scale-[1.7] translate-y-[8%] md:scale-[1] md:-translate-y-[10%] lg:-translate-y-[23%]"
                   width={1024}
                   height={490}
                   alt="AI"
+                  priority
+                  quality={85}
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 90vw, 1024px"
                 />
 
                 <Generating className="absolute left-4 right-4 bottom-5 md:left-1/2 md:right-auto md:bottom-8 md:w-[31rem] md:-translate-x-1/2" />
@@ -76,7 +81,7 @@ const Hero = () => {
                   <ul className="hidden absolute -left-[5.5rem] bottom-[7.5rem] px-1 py-1 bg-n-9/40 backdrop-blur border border-n-1/10 rounded-2xl xl:flex">
                     {heroIcons.map((icon, index) => (
                       <li className="p-5" key={index}>
-                        <img src={icon} width={24} height={25} alt={icon} />
+                        <Image src={icon} width={24} height={25} alt={icon} loading="lazy" />
                       </li>
                     ))}
                   </ul>
@@ -94,12 +99,15 @@ const Hero = () => {
             <Gradient />
           </div>
           <div className="absolute -top-[54%] left-1/2 w-[234%] -translate-x-1/2 md:-top-[46%] md:w-[138%] lg:-top-[104%]">
-            <img
+            <Image
               src={heroBackground}
               className="w-full"
               width={1440}
               height={1800}
               alt="hero"
+              priority
+              quality={80}
+              sizes="100vw"
             />
           </div>
 

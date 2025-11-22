@@ -10,9 +10,27 @@ interface AuthContextType {
   loading: boolean
   userType: "patient" | "doctor" | null
   login: (email: string, password: string) => Promise<void>
-  signup: (email: string, password: string, name: string) => Promise<void>
+  signup: (data: {
+    email: string
+    password: string
+    name: string
+    phone_no?: string | null
+    dob?: string | null
+    gender?: string | null
+    city?: string | null
+    last_hospital_visit?: string | null
+    chronic_conditions?: string[] | null
+    allergies?: string[] | null
+    current_medications?: string[] | null
+    past_prescriptions?: string[] | null
+    language_preferred?: string[] | null
+    communication_style?: string | null
+    domicile_location?: string | null
+  }) => Promise<void>
   logout: () => void
   setSessionData: (sessionId: string, userId: string) => void
+  checkLocationStatus: () => Promise<{ needsLocation: boolean; patientId?: number }>
+  updateLocation: (latitude: number, longitude: number) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -60,15 +78,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("user_type", "patient")
   }
 
-  const signup = async (email: string, password: string, name: string) => {
+  const signup = async (data: {
+    email: string
+    password: string
+    name: string
+    phone_no?: string | null
+    dob?: string | null
+    gender?: string | null
+    city?: string | null
+    last_hospital_visit?: string | null
+    chronic_conditions?: string[] | null
+    allergies?: string[] | null
+    current_medications?: string[] | null
+    past_prescriptions?: string[] | null
+    language_preferred?: string[] | null
+    communication_style?: string | null
+    domicile_location?: string | null
+  }) => {
     const axios = (await import("axios")).default
     
     // Use Next.js API proxy route to avoid SSL certificate issues
-    await axios.post("/api/proxy/signup", {
-      email,
-      password,
-      name,
-    })
+    await axios.post("/api/proxy/signup", data)
   }
 
   const logout = () => {
@@ -91,6 +121,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("userId", newUserId)
   }
 
+  const checkLocationStatus = async () => {
+    const axios = (await import("axios")).default
+    const currentToken = localStorage.getItem("token")
+    
+    console.log("[AuthContext] Checking location with token:", currentToken ? "Token exists" : "No token")
+    
+    const res = await axios.post("/api/patient-location/check", {
+      token: currentToken,
+    })
+
+    return res.data
+  }
+
+  const updateLocation = async (latitude: number, longitude: number) => {
+    const axios = (await import("axios")).default
+    const currentToken = localStorage.getItem("token")
+    
+    console.log("[AuthContext] Updating location with token:", currentToken ? "Token exists" : "No token")
+    console.log("[AuthContext] Coordinates:", latitude, longitude)
+    
+    await axios.post("/api/patient-location/update", {
+      token: currentToken,
+      latitude,
+      longitude,
+    })
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -104,6 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signup,
         logout,
         setSessionData,
+        checkLocationStatus,
+        updateLocation,
       }}
     >
       {children}

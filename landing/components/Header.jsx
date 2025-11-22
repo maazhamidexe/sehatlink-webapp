@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { disablePageScroll, enablePageScroll } from "scroll-lock";
 
 import { brainwaveSymbol } from "../assets";
@@ -64,7 +65,7 @@ const Header = () => {
     >
       <div className="flex items-center px-5 lg:px-7.5 xl:px-10 max-lg:py-4">
         <a className="flex items-center gap-2 xl:mr-8" href="#hero">
-          <img src={brainwaveSymbol} width={40} height={40} alt="Sehat Link" />
+          <Image src={brainwaveSymbol} width={40} height={40} alt="Sehat Link" priority />
           <span className="text-2xl font-bold text-n-1">Sehat Link</span>
         </a>
 

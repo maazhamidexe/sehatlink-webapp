@@ -1,14 +1,38 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import ButtonGradient from "@/landing/assets/svg/ButtonGradient";
-import Benefits from "@/landing/components/Benefits";
-import Collaboration from "@/landing/components/Collaboration";
-import Footer from "@/landing/components/Footer";
 import Header from "@/landing/components/Header";
 import Hero from "@/landing/components/Hero";
-import Pricing from "@/landing/components/Pricing";
-import Roadmap from "@/landing/components/Roadmap";
-import Services from "@/landing/components/Services";
+
+// Lazy load below-the-fold components
+const Benefits = dynamic(() => import("@/landing/components/Benefits"), {
+  loading: () => <div className="min-h-[500px]" />,
+});
+
+const Collaboration = dynamic(() => import("@/landing/components/Collaboration"), {
+  loading: () => <div className="min-h-[400px]" />,
+});
+
+const Services = dynamic(() => import("@/landing/components/Services"), {
+  loading: () => <div className="min-h-[600px]" />,
+});
+
+const Pricing = dynamic(() => import("@/landing/components/Pricing"), {
+  loading: () => <div className="min-h-[500px]" />,
+});
+
+const Roadmap = dynamic(() => import("@/landing/components/Roadmap"), {
+  loading: () => <div className="min-h-[500px]" />,
+});
+
+const AgentsCarousel = dynamic(() => import("@/landing/components/AgentsCarousel"), {
+  loading: () => <div className="min-h-[600px]" />,
+});
+
+const Footer = dynamic(() => import("@/landing/components/Footer"), {
+  loading: () => <div className="min-h-[200px]" />,
+});
 
 const LandingPage = () => {
   return (
@@ -17,6 +41,7 @@ const LandingPage = () => {
         <Header />
         <Hero />
         <Benefits />
+        <AgentsCarousel />
         <Collaboration />
         <Services />
         <Pricing />

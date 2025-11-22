@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import Image from "next/image";
 import { benefits } from "../constants";
 import Heading from "./Heading";
 import Section from "./Section";
@@ -29,11 +30,12 @@ const Benefits = () => {
                 <h5 className="h5 mb-5">{item.title}</h5>
                 <p className="body-2 mb-6 text-n-3">{item.text}</p>
                 <div className="flex items-center mt-auto">
-                  <img
+                  <Image
                     src={item.iconUrl}
                     width={48}
                     height={48}
                     alt={item.title}
+                    loading="lazy"
                   />
                   <p className="ml-auto font-code text-xs font-bold text-n-1 uppercase tracking-wider">
                     Explore more
@@ -50,12 +52,14 @@ const Benefits = () => {
               >
                 <div className="absolute inset-0 opacity-0 transition-opacity hover:opacity-10">
                   {item.imageUrl && (
-                    <img
+                    <Image
                       src={item.imageUrl}
                       width={380}
                       height={362}
                       alt={item.title}
                       className="w-full h-full object-cover"
+                      loading="lazy"
+                      quality={85}
                     />
                   )}
                 </div>

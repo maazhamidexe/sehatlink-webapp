@@ -7,11 +7,15 @@ import "./globals.css";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  display: 'swap',
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: 'swap',
+  preload: true,
 });
 
 export const metadata: Metadata = {
@@ -38,12 +42,14 @@ export default function RootLayout({
           </div>
           <div className="app-surface">{children}</div>
         </AuthProvider>
-        <Script id="unicorn-studio" strategy="afterInteractive">{`
+        <Script id="unicorn-studio" strategy="lazyOnload">{`
 !function(){
   if(!window.UnicornStudio){
     window.UnicornStudio={isInitialized:!1};
     var i=document.createElement("script");
     i.src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.35/dist/unicornStudio.umd.js";
+    i.async=true;
+    i.defer=true;
     i.onload=function(){
       if(!window.UnicornStudio.isInitialized){
         UnicornStudio.init();

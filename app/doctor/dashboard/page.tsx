@@ -2,19 +2,22 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/supabase"
 import { DiseaseMap } from "@/components/disease-map"
+import { FileText, X, Stethoscope, UserCircle } from "lucide-react"
 
 interface Appointment {
   id: number
   doctor_id: number
   patient_id: number
   appointment_time: string
+  appointment_date?: string | null
   status: string | null
   notes?: string | null
   transcription?: string | null
@@ -52,6 +55,8 @@ export default function DoctorDashboard() {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem("doctor_token")
@@ -229,7 +234,12 @@ export default function DoctorDashboard() {
 
   const handleAppointmentClick = (appointment: Appointment) => {
     const status = appointment.status?.toLowerCase() || ""
-    if (status === "confirmed" || status === "pending" || status === "scheduled" || status === "in_progress") {
+    if (status === "completed") {
+      // Show details modal for completed appointments
+      setSelectedAppointment(appointment)
+      setIsAppointmentModalOpen(true)
+    } else if (status === "confirmed" || status === "pending" || status === "scheduled" || status === "in_progress") {
+      // Navigate to appointment page for active appointments
       router.push(`/appointment/${appointment.id}`)
     }
   }
@@ -252,37 +262,112 @@ export default function DoctorDashboard() {
     }
   }
 
-  const formatDate = (timestamp: string) => {
-    const date = new Date(timestamp)
-    return date.toLocaleDateString("en-US", { 
-      weekday: "short", 
-      year: "numeric", 
-      month: "short", 
-      day: "numeric" 
-    })
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return "Date not set"
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return "Invalid date"
+      return date.toLocaleDateString("en-US", { 
+        weekday: "short", 
+        year: "numeric", 
+        month: "short", 
+        day: "numeric" 
+      })
+    } catch {
+      return "Invalid date"
+    }
   }
 
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString("en-US", { 
-      hour: "numeric", 
-      minute: "2-digit",
-      hour12: true
-    })
+  const formatTime = (timeStr: string | null | undefined) => {
+    if (!timeStr) return "Time not set"
+    try {
+      // If it's just a time string (HH:MM:SS), format it directly
+      if (timeStr.match(/^\d{2}:\d{2}(:\d{2})?(\.\d+)?$/)) {
+        const [hours, minutes] = timeStr.split(':')
+        const hour = parseInt(hours, 10)
+        const minute = parseInt(minutes, 10)
+        const date = new Date()
+        date.setHours(hour, minute, 0, 0)
+        return date.toLocaleTimeString("en-US", { 
+          hour: "numeric", 
+          minute: "2-digit",
+          hour12: true
+        })
+      }
+      // If it's a full timestamp, parse it
+      const date = new Date(timeStr)
+      if (isNaN(date.getTime())) return "Invalid time"
+      return date.toLocaleTimeString("en-US", { 
+        hour: "numeric", 
+        minute: "2-digit",
+        hour12: true
+      })
+    } catch {
+      return "Invalid time"
+    }
   }
 
-  const formatDateTime = (timestamp: string) => {
-    return `${formatDate(timestamp)} at ${formatTime(timestamp)}`
+  const formatDateTime = (appointment: Appointment) => {
+    const dateStr = appointment.appointment_date
+    const timeStr = appointment.appointment_time
+    const completedAt = appointment.completed_at
+    
+    // Try to combine appointment_date and appointment_time
+    if (dateStr && timeStr) {
+      try {
+        const date = new Date(dateStr)
+        const timeParts = timeStr.split(':')
+        if (timeParts.length >= 2) {
+          const hours = parseInt(timeParts[0], 10)
+          const minutes = parseInt(timeParts[1], 10)
+          const seconds = timeParts[2] ? parseInt(timeParts[2].split('.')[0], 10) : 0
+          
+          if (!isNaN(hours) && !isNaN(minutes)) {
+            date.setHours(hours, minutes, seconds, 0)
+            if (!isNaN(date.getTime())) {
+              return date.toLocaleString("en-US", {
+                weekday: "short",
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+              })
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Error formatting datetime:", e)
+      }
+    }
+    
+    // Fallback 1: Use completed_at if available and no appointment_date
+    if (!dateStr && completedAt) {
+      try {
+        const date = new Date(completedAt)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleString("en-US", {
+            weekday: "short",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true
+          })
+        }
+      } catch (e) {
+        console.error("Error formatting completed_at:", e)
+      }
+    }
+    
+    // Fallback 2: Show date and time separately
+    const datePart = dateStr ? formatDate(dateStr) : (completedAt ? formatDate(completedAt) : "Date not set")
+    const timePart = timeStr ? formatTime(timeStr) : "Time not set"
+    return `${datePart} at ${timePart}`
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map(n => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
-  }
 
   const pendingCount = appointments.filter(a => a.status?.toLowerCase() === "pending" || a.status?.toLowerCase() === "scheduled").length
   const confirmedCount = appointments.filter(a => a.status?.toLowerCase() === "confirmed" || a.status?.toLowerCase() === "completed").length
@@ -298,16 +383,9 @@ export default function DoctorDashboard() {
       <header className="border-b border-n-6 bg-n-7/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-conic-gradient">
-                <svg className="w-5 h-5 text-n-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-n-1">SehatLink</h1>
-                <p className="text-xs text-n-3">Doctor Portal</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <img src="/sehat-link-logo.svg" width={32} height={32} alt="Sehat Link" />
+              <h1 className="text-xl font-bold text-n-1">Sehat Link</h1>
             </div>
             <Button
               onClick={handleLogout}
@@ -335,16 +413,12 @@ export default function DoctorDashboard() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Card className="border-n-6 bg-n-7/50 backdrop-blur-sm overflow-hidden">
-                <div className="h-24 bg-conic-gradient"></div>
-                <CardContent className="p-6 -mt-12">
+              <Card className="border-n-6 bg-n-7/50 backdrop-blur-sm">
+                <CardContent className="p-6">
                   <div className="flex flex-col items-center mb-4">
-                    <Avatar className="h-24 w-24 border-4 border-n-8 mb-3">
-                      <AvatarImage src="" alt={doctor?.name || "Doctor"} />
-                      <AvatarFallback className="bg-conic-gradient text-n-8 text-2xl font-bold">
-                        {doctor ? getInitials(doctor.name) : "DR"}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="h-24 w-24 rounded-full bg-n-8 border-4 border-n-6 mb-3 flex items-center justify-center">
+                      <Stethoscope className="h-12 w-12 text-n-1" strokeWidth={2} />
+                    </div>
                     <h2 className="text-xl font-bold text-n-1 text-center">
                       {doctor?.name || "Dr. Loading..."}
                     </h2>
@@ -521,7 +595,7 @@ export default function DoctorDashboard() {
                           animate={{ opacity: 1, y: 0 }}
                           onClick={() => handleAppointmentClick(appointment)}
                           className={`border border-n-6 rounded-lg p-4 bg-n-8/30 transition-all ${
-                            (appointment.status?.toLowerCase() === "confirmed" || appointment.status?.toLowerCase() === "pending" || appointment.status?.toLowerCase() === "scheduled" || appointment.status?.toLowerCase() === "in_progress") 
+                            (appointment.status?.toLowerCase() === "confirmed" || appointment.status?.toLowerCase() === "pending" || appointment.status?.toLowerCase() === "scheduled" || appointment.status?.toLowerCase() === "in_progress" || appointment.status?.toLowerCase() === "completed") 
                               ? "hover:bg-n-8/50 cursor-pointer hover:border-color-1 hover:shadow-lg hover:shadow-color-1/10" 
                               : "opacity-70"
                           }`}
@@ -549,7 +623,7 @@ export default function DoctorDashboard() {
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                   </svg>
-                                  {formatDateTime(appointment.appointment_time)}
+                                  {formatDateTime(appointment)}
                                 </p>
                                 {appointment.chief_complaint && (
                                   <p className="flex items-start gap-2 mt-2">
@@ -584,6 +658,283 @@ export default function DoctorDashboard() {
           </div>
         </div>
       </main>
+
+      {/* Appointment Details Modal */}
+      <AnimatePresence>
+        {isAppointmentModalOpen && selectedAppointment && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsAppointmentModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-lg border border-n-6 bg-n-8 shadow-2xl"
+            >
+              <Card className="border-0 bg-transparent">
+                <CardHeader className="border-b border-n-6 bg-n-7/50">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xl flex items-center gap-2 text-n-1">
+                      <FileText className="h-5 w-5" />
+                      Appointment Details
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsAppointmentModalOpen(false)}
+                      className="text-n-4 hover:text-n-1"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                  <ScrollArea className="h-full">
+                    <div className="space-y-6">
+                      {/* Patient Information */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Patient Information</h3>
+                        <div className="space-y-1">
+                          <p className="text-base font-semibold text-n-1">
+                            {selectedAppointment.patient_name || "N/A"}
+                          </p>
+                          {selectedAppointment.patient_email && (
+                            <p className="text-sm text-n-4">{selectedAppointment.patient_email}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <Separator className="bg-n-6" />
+
+                      {/* Appointment Date & Time */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Date & Time</h3>
+                        <div className="space-y-1">
+                          {selectedAppointment.appointment_date && (
+                            <p className="text-sm text-n-1">
+                              Date: {new Date(selectedAppointment.appointment_date).toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          )}
+                          {selectedAppointment.appointment_time && (
+                            <p className="text-sm text-n-1">
+                              {selectedAppointment.appointment_date 
+                                ? `Time: ${selectedAppointment.appointment_time}`
+                                : formatDateTime(selectedAppointment.appointment_time)
+                              }
+                            </p>
+                          )}
+                          {selectedAppointment.completed_at && (
+                            <p className="text-xs text-n-4 mt-1">
+                              Completed: {new Date(selectedAppointment.completed_at).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <Separator className="bg-n-6" />
+
+                      {/* Chief Complaint */}
+                      {selectedAppointment.chief_complaint && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Chief Complaint</h3>
+                            <p className="text-sm text-n-1 leading-relaxed">{selectedAppointment.chief_complaint}</p>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Symptoms */}
+                      {selectedAppointment.symptoms && Array.isArray(selectedAppointment.symptoms) && selectedAppointment.symptoms.length > 0 && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Symptoms</h3>
+                            <div className="space-y-2">
+                              {selectedAppointment.symptoms.map((symptom: any, index: number) => (
+                                <div key={index} className="p-3 rounded-lg border border-n-6 bg-n-9/40">
+                                  <p className="text-sm font-medium text-n-1">{symptom.name || `Symptom ${index + 1}`}</p>
+                                  {symptom.severity && (
+                                    <p className="text-xs text-n-4 mt-1">Severity: {symptom.severity}</p>
+                                  )}
+                                  {symptom.duration && (
+                                    <p className="text-xs text-n-4">Duration: {symptom.duration}</p>
+                                  )}
+                                  {symptom.notes && (
+                                    <p className="text-xs text-n-3 mt-1">{symptom.notes}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Diagnosis */}
+                      {selectedAppointment.diagnosis && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Diagnosis</h3>
+                            <p className="text-sm text-n-1 leading-relaxed">{selectedAppointment.diagnosis}</p>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Examination Findings */}
+                      {selectedAppointment.examination_findings && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Examination Findings</h3>
+                            <p className="text-sm text-n-1 leading-relaxed">{selectedAppointment.examination_findings}</p>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Vital Signs */}
+                      {selectedAppointment.vital_signs && typeof selectedAppointment.vital_signs === 'object' && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Vital Signs</h3>
+                            <div className="grid grid-cols-2 gap-2">
+                              {selectedAppointment.vital_signs.blood_pressure && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">Blood Pressure</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.blood_pressure}</p>
+                                </div>
+                              )}
+                              {selectedAppointment.vital_signs.heart_rate && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">Heart Rate</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.heart_rate}</p>
+                                </div>
+                              )}
+                              {selectedAppointment.vital_signs.temperature && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">Temperature</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.temperature}</p>
+                                </div>
+                              )}
+                              {selectedAppointment.vital_signs.weight && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">Weight</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.weight}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Prescription */}
+                      {selectedAppointment.prescription && Array.isArray(selectedAppointment.prescription) && selectedAppointment.prescription.length > 0 && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Prescription</h3>
+                            <div className="space-y-2">
+                              {selectedAppointment.prescription.map((med: any, index: number) => (
+                                <div key={index} className="p-3 rounded-lg border border-n-6 bg-n-9/40">
+                                  <p className="text-sm font-medium text-n-1">{med.medication || `Medication ${index + 1}`}</p>
+                                  <div className="mt-2 space-y-1">
+                                    {med.dosage && (
+                                      <p className="text-xs text-n-4">Dosage: {med.dosage}</p>
+                                    )}
+                                    {med.frequency && (
+                                      <p className="text-xs text-n-4">Frequency: {med.frequency}</p>
+                                    )}
+                                    {med.duration && (
+                                      <p className="text-xs text-n-4">Duration: {med.duration}</p>
+                                    )}
+                                    {med.instructions && (
+                                      <p className="text-xs text-n-3 mt-1">{med.instructions}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Lab Tests */}
+                      {selectedAppointment.lab_tests && Array.isArray(selectedAppointment.lab_tests) && selectedAppointment.lab_tests.length > 0 && (
+                        <>
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Lab Tests</h3>
+                            <div className="space-y-2">
+                              {selectedAppointment.lab_tests.map((test: any, index: number) => (
+                                <div key={index} className="p-3 rounded-lg border border-n-6 bg-n-9/40">
+                                  <p className="text-sm font-medium text-n-1">{test.test_name || `Test ${index + 1}`}</p>
+                                  {test.reason && (
+                                    <p className="text-xs text-n-4 mt-1">Reason: {test.reason}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Follow-up */}
+                      {(selectedAppointment.follow_up_date || selectedAppointment.follow_up_notes) && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Follow-up</h3>
+                          <div className="space-y-1">
+                            {selectedAppointment.follow_up_date && (
+                              <p className="text-sm text-n-1">
+                                Date: {new Date(selectedAppointment.follow_up_date).toLocaleDateString()}
+                              </p>
+                            )}
+                            {selectedAppointment.follow_up_notes && (
+                              <p className="text-sm text-n-1 leading-relaxed mt-2">{selectedAppointment.follow_up_notes}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Transcription */}
+                      {selectedAppointment.transcription && (
+                        <>
+                          <Separator className="bg-n-6" />
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Transcription</h3>
+                            <p className="text-sm text-n-2 leading-relaxed whitespace-pre-wrap">{selectedAppointment.transcription}</p>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Notes */}
+                      {selectedAppointment.notes && (
+                        <>
+                          <Separator className="bg-n-6" />
+                          <div>
+                            <h3 className="text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide">Notes</h3>
+                            <p className="text-sm text-n-2 leading-relaxed whitespace-pre-wrap">{selectedAppointment.notes}</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

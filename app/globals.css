@@ -93,6 +93,7 @@
   --font-sora: "Sora", sans-serif;
   --font-code: "Source Code Pro", monospace;
   --font-grotesk: "Space Grotesk", sans-serif;
+  --font-urdu: "Noto Nastaliq Urdu", "Noto Sans Arabic", sans-serif;
   --tracking-tagline: 0.15em;
   --spacing-0\.25: 0.0625rem;
   --spacing-7\.5: 1.875rem;
@@ -229,6 +230,11 @@
   .landing-page {
     @apply min-h-screen bg-n-8 text-n-1 text-base;
     font-family: var(--font-sora, "Sora", sans-serif);
+  }
+
+  .font-urdu {
+    font-family: var(--font-urdu, "Noto Nastaliq Urdu", "Noto Sans Arabic", sans-serif);
+    direction: rtl;
   }
 
   .app-surface {

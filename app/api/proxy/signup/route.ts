@@ -12,6 +12,18 @@ export async function POST(request: NextRequest) {
       email: body.email,
       password: body.password,
       name: body.name,
+      phone_no: body.phone_no || null,
+      dob: body.dob || null,
+      gender: body.gender || null,
+      city: body.city || null,
+      last_hospital_visit: body.last_hospital_visit || null,
+      chronic_conditions: body.chronic_conditions || null,
+      allergies: body.allergies || null,
+      current_medications: body.current_medications || null,
+      past_prescriptions: body.past_prescriptions || null,
+      language_preferred: body.language_preferred || null,
+      communication_style: body.communication_style || null,
+      domicile_location: body.domicile_location || null,
     })
 
     return NextResponse.json(response.data)

@@ -22,6 +22,11 @@ import {
   Bell,
   Loader2,
   AlertCircle,
+  Calendar,
+  X,
+  FileText,
+  Languages,
+  WifiOff,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,6 +36,8 @@ import { Button } from "@/components/ui/button"
 
 import { Separator } from "@/components/ui/separator"
 import { MedicineReminderCard } from "@/components/medicine-reminder-card"
+import { Badge } from "@/components/ui/badge"
+import ReactMarkdown from "react-markdown"
 
 interface Message {
   id: string
@@ -40,59 +47,76 @@ interface Message {
   agent?: string
   isStreaming?: boolean
   isBridging?: boolean
+  chat_trigger?: boolean
 }
 
 interface AgentInfo {
   name: string
+  subtitle?: string
   icon: React.ReactNode
   color: string
   description: string
   lastActive: Date | null
 }
 
+interface Appointment {
+  id: number
+  doctor_id: number
+  patient_id: number
+  appointment_date: string | null
+  appointment_time: string | null
+  status: string | null
+  chief_complaint: string | null
+  diagnosis: string | null
+  transcription: string | null
+  symptoms: any
+  prescription: any
+  lab_tests: any
+  vital_signs: any
+  examination_findings: string | null
+  follow_up_date: string | null
+  follow_up_notes: string | null
+  completed_at: string | null
+  doctors?: {
+    id: number
+    name: string
+    specialization: string | null
+  }
+}
+
 // Agent mapping with icons and colors
 const getAgentInfo = (agentName: string): AgentInfo => {
   const agentMap: Record<string, AgentInfo> = {
     "Triage Agent": {
-      name: "Triage Agent",
+      name: "Miss Sehat",
+      subtitle: "Triage Agent",
       icon: <ClipboardList className="h-6 w-6" />,
       color: "#79fff7",
       description: "Assessing your needs and routing to the appropriate specialist",
       lastActive: null,
     },
-    "Health Assistant": {
-      name: "Health Assistant",
-      icon: <Heart className="h-6 w-6" />,
-      color: "#ff776f",
-      description: "Managing your medication reminders and scheduling",
-      lastActive: null,
-    },
-    "Diagnostic Agent": {
-      name: "Diagnostic Agent",
+    "Symptom Agent": {
+      name: "Nora",
+      subtitle: "Symptom Agent",
       icon: <Stethoscope className="h-6 w-6" />,
-      color: "#ac6aff",
+      color: "#ff776f",
       description: "Analyzing symptoms and providing preliminary insights",
       lastActive: null,
     },
-    "Care Coordinator": {
-      name: "Care Coordinator",
+    "Programme Eligibility Agent": {
+      name: "Iris",
+      subtitle: "Programme Eligibility Agent",
       icon: <UserCheck className="h-6 w-6" />,
       color: "#7adb78",
-      description: "Coordinating with healthcare providers",
+      description: "Checking programme eligibility and requirements",
       lastActive: null,
     },
-    "Medication Manager": {
-      name: "Medication Manager",
-      icon: <Pill className="h-6 w-6" />,
-      color: "#858dff",
-      description: "Tracking and managing your medications",
-      lastActive: null,
-    },
-    "AI Assistant": {
-      name: "AI Assistant",
-      icon: <Brain className="h-6 w-6" />,
-      color: "#ffc876",
-      description: "General health assistance and information",
+    "Doctor Agent": {
+      name: "Morgan",
+      subtitle: "Doctor Agent",
+      icon: <Heart className="h-6 w-6" />,
+      color: "#ac6aff",
+      description: "Coordinating with healthcare providers and doctors",
       lastActive: null,
     },
   }
@@ -110,9 +134,26 @@ const getAgentInfo = (agentName: string): AgentInfo => {
 
 const getSafeAgentName = (agentData: unknown): string => {
   if (typeof agentData === "string") {
-    const trimmed = agentData.trim()
+    const trimmed = agentData.trim().toLowerCase()
+    // Normalize agent names
+    if (trimmed === "triage_agent" || trimmed === "triage agent") {
+      return "Triage Agent"
+    }
+    if (trimmed === "symptom_agent" || trimmed === "symptom agent") {
+      return "Symptom Agent"
+    }
+    if (trimmed === "programme_eligibility_agent" || trimmed === "programme eligibility agent") {
+      return "Programme Eligibility Agent"
+    }
+    if (trimmed === "doctor_agent" || trimmed === "doctor agent") {
+      return "Doctor Agent"
+    }
     if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+      // Capitalize first letter of each word for consistency
       return trimmed
+        .split(" ")
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(" ")
     }
   }
 
@@ -122,13 +163,31 @@ const getSafeAgentName = (agentData: unknown): string => {
       (agentData as { name?: string; agent?: string }).agent
 
     if (typeof possibleName === "string") {
-      const trimmed = possibleName.trim()
-      if (trimmed) {
+      const trimmed = possibleName.trim().toLowerCase()
+      // Normalize agent names
+      if (trimmed === "triage_agent" || trimmed === "triage agent") {
+        return "Triage Agent"
+      }
+      if (trimmed === "symptom_agent" || trimmed === "symptom agent") {
+        return "Symptom Agent"
+      }
+      if (trimmed === "programme_eligibility_agent" || trimmed === "programme eligibility agent") {
+        return "Programme Eligibility Agent"
+      }
+      if (trimmed === "doctor_agent" || trimmed === "doctor agent") {
+        return "Doctor Agent"
+      }
+      if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+        // Capitalize first letter of each word for consistency
         return trimmed
+          .split(" ")
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(" ")
       }
     }
   }
 
+  // Default to Triage Agent if agent is null, undefined, or invalid
   return "Triage Agent"
 }
 
@@ -157,6 +216,152 @@ const getSafeResponseText = (response: unknown): string => {
   }
 
   return String(response)
+}
+
+// Translation object
+const translations = {
+  en: {
+    // Header
+    sehatLink: "Sehat Link",
+    followUps: "Follow Ups",
+    newChat: "New Chat",
+    logout: "Logout",
+    // Welcome message
+    welcomeMessage: "Hello! I'm your healthcare assistant. How can I help you today?",
+    // Bridging messages
+    thinking: "Thinking...",
+    processing: "Processing request...",
+    analyzing: "Analyzing context...",
+    routing: "Routing to appropriate agent...",
+    callingTools: "Calling necessary tools...",
+    // Notifications
+    medicineFollowUp: "Medicine Follow-up",
+    latestInsights: "Latest adherence insights",
+    fetchingNotifications: "Fetching notifications...",
+    allCaughtUp: "You're all caught up. No new alerts.",
+    // Appointments
+    myAppointments: "My Appointments",
+    noCompletedAppointments: "No completed appointments yet",
+    completed: "Completed",
+    // Input
+    typeMessage: "Type your message...",
+    // Agent Orchestration
+    agentOrchestration: "Agent Orchestration",
+    waitingForAgent: "Waiting for agent activation...",
+    activeNow: "Active now",
+    currentlyProcessing: "Currently processing",
+    // Appointment button
+    allowAgentCall: "Allow agent to call and book appointment",
+    // New chat confirmation
+    newChatConfirm: "Doing this will delete the session. Do you want to continue?",
+    // Appointment modal
+    appointmentDetails: "Appointment Details",
+    doctorInformation: "Doctor Information",
+    dateTime: "Date & Time",
+    chiefComplaint: "Chief Complaint",
+    symptoms: "Symptoms",
+    severity: "Severity",
+    duration: "Duration",
+    diagnosis: "Diagnosis",
+    examinationFindings: "Examination Findings",
+    vitalSigns: "Vital Signs",
+    bloodPressure: "Blood Pressure",
+    heartRate: "Heart Rate",
+    temperature: "Temperature",
+    weight: "Weight",
+    prescription: "Prescription",
+    medication: "Medication",
+    dosage: "Dosage",
+    frequency: "Frequency",
+    instructions: "Instructions",
+    labTests: "Lab Tests",
+    testName: "Test Name",
+    reason: "Reason",
+    followUp: "Follow-up",
+    date: "Date",
+    transcription: "Transcription",
+    // Status messages
+    processingStatus: "Processing...",
+    voiceAgentCalled: "Voice Agent has called on your behalf",
+    // Errors
+    userIdNotFound: "User ID not found. Please try logging in again.",
+    failedToInitiate: "Failed to initiate appointment call",
+    failedToStartChat: "Failed to start chat session",
+    failedToStartNewChat: "Failed to start new chat",
+    needToBeLoggedIn: "You need to be logged in to view notifications.",
+    unableToFetch: "Unable to fetch notifications.",
+  },
+  ur: {
+    // Header
+    sehatLink: "صحت لنک",
+    followUps: "فالو اپس",
+    newChat: "نیا چیٹ",
+    logout: "لاگ آؤٹ",
+    // Welcome message
+    welcomeMessage: "ہیلو! میں آپ کا ہیلتھ کیئر اسسٹنٹ ہوں۔ میں آپ کی کس طرح مدد کر سکتا ہوں؟",
+    // Bridging messages
+    thinking: "سوچ رہا ہوں...",
+    processing: "درخواست پر کارروائی...",
+    analyzing: "سیاق و سباق کا تجزیہ...",
+    routing: "مناسب ایجنٹ کو بھیج رہا ہوں...",
+    callingTools: "ضروری ٹولز استعمال کر رہا ہوں...",
+    // Notifications
+    medicineFollowUp: "دوائی فالو اپ",
+    latestInsights: "تازہ ترین معلومات",
+    fetchingNotifications: "اطلاعات حاصل کی جا رہی ہیں...",
+    allCaughtUp: "آپ کوئی نئی الرٹ نہیں ہیں۔",
+    // Appointments
+    myAppointments: "میرے اپائنٹمنٹس",
+    noCompletedAppointments: "ابھی تک کوئی مکمل اپائنٹمنٹ نہیں",
+    completed: "مکمل",
+    // Input
+    typeMessage: "اپنا پیغام ٹائپ کریں...",
+    // Agent Orchestration (keeping in English as requested)
+    agentOrchestration: "Agent Orchestration",
+    waitingForAgent: "Waiting for agent activation...",
+    activeNow: "Active now",
+    currentlyProcessing: "Currently processing",
+    // Appointment button
+    allowAgentCall: "ایجنٹ کو کال کرنے اور اپائنٹمنٹ بک کرنے کی اجازت دیں",
+    // New chat confirmation
+    newChatConfirm: "ایسا کرنے سے سیشن حذف ہو جائے گا۔ کیا آپ جاری رکھنا چاہتے ہیں؟",
+    // Appointment modal
+    appointmentDetails: "اپائنٹمنٹ کی تفصیلات",
+    doctorInformation: "ڈاکٹر کی معلومات",
+    dateTime: "تاریخ اور وقت",
+    chiefComplaint: "بنیادی شکایت",
+    symptoms: "علامات",
+    severity: "شدت",
+    duration: "دورانیہ",
+    diagnosis: "تشخیص",
+    examinationFindings: "معائنے کے نتائج",
+    vitalSigns: "اہم علامات",
+    bloodPressure: "بلڈ پریشر",
+    heartRate: "دل کی دھڑکن",
+    temperature: "درجہ حرارت",
+    weight: "وزن",
+    prescription: "نسخہ",
+    medication: "دوائی",
+    dosage: "خوری",
+    frequency: "تعدد",
+    instructions: "ہدایات",
+    labTests: "لیب ٹیسٹ",
+    testName: "ٹیسٹ کا نام",
+    reason: "وجہ",
+    followUp: "فالو اپ",
+    date: "تاریخ",
+    transcription: "ٹرانسکرپشن",
+    // Status messages
+    processingStatus: "پراسیسنگ...",
+    voiceAgentCalled: "وائس ایجنٹ نے آپ کی جانب سے کال کی ہے",
+    // Errors
+    userIdNotFound: "صارف ID نہیں ملا۔ براہ کرم دوبارہ لاگ ان کریں۔",
+    failedToInitiate: "اپائنٹمنٹ کال شروع کرنے میں ناکام",
+    failedToStartChat: "چیٹ سیشن شروع کرنے میں ناکام",
+    failedToStartNewChat: "نیا چیٹ شروع کرنے میں ناکام",
+    needToBeLoggedIn: "اطلاعات دیکھنے کے لیے آپ کو لاگ ان ہونا ہوگا۔",
+    unableToFetch: "اطلاعات حاصل کرنے میں ناکام۔",
+  },
 }
 
 const normalizeMedicineStatusResponse = (response: unknown): string[] => {
@@ -217,6 +422,7 @@ const normalizeMedicineStatusResponse = (response: unknown): string[] => {
 export default function Home() {
   const router = useRouter()
   const { token, userId, loggedIn, loading, logout, setSessionData } = useAuth()
+  const [language, setLanguage] = useState<"en" | "ur">("en")
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [currentAgent, setCurrentAgent] = useState<string>("Triage Agent")
@@ -228,6 +434,14 @@ export default function Home() {
   const [notificationMessages, setNotificationMessages] = useState<string[]>([])
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [notificationError, setNotificationError] = useState<string | null>(null)
+  const [localTrigger, setLocalTrigger] = useState(true)
+  const [appointmentCallStatus, setAppointmentCallStatus] = useState<string | null>(null)
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false)
+  
+  const t = translations[language]
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const agentPanelRef = useRef<HTMLDivElement>(null)
@@ -241,6 +455,27 @@ export default function Home() {
     const triageInfo = getAgentInfo("Triage Agent")
     setActiveAgents(new Map([["Triage Agent", { ...triageInfo, lastActive: new Date() }]]))
   }, [])
+
+  // Fetch patient appointments
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      if (!userId) return
+
+      setAppointmentsLoading(true)
+      try {
+        const response = await axios.get(`/api/patient/appointments?patient_id=${userId}`)
+        setAppointments(response.data || [])
+      } catch (error: any) {
+        console.error("Error fetching appointments:", error)
+      } finally {
+        setAppointmentsLoading(false)
+      }
+    }
+
+    if (userId && loggedIn) {
+      fetchAppointments()
+    }
+  }, [userId, loggedIn])
 
   const scrollToBottom = () => {
     // Use requestAnimationFrame to ensure DOM is updated
@@ -315,7 +550,7 @@ export default function Home() {
         // Add welcome message from Triage Agent
         setMessages([{
           id: "1",
-          text: "Hello! I'm your healthcare assistant. How can I help you today?",
+          text: t.welcomeMessage,
           sender: "assistant",
           agent: "Triage Agent",
           timestamp: new Date(),
@@ -323,11 +558,39 @@ export default function Home() {
       }
 
       ws.onmessage = (e) => {
+        console.log("📨 RAW WebSocket data:", e.data)
         const data = JSON.parse(e.data)
+        console.log("📩 PARSED WebSocket data:", data)
+        console.log("🔍 Trigger fields inspection:", {
+          chat_trigger: {
+            raw_value: data.chat_trigger,
+            type: typeof data.chat_trigger,
+            is_true: data.chat_trigger === true,
+          },
+          call_trigger: {
+            raw_value: data.call_trigger,
+            type: typeof data.call_trigger,
+            is_true: data.call_trigger === true,
+          }
+        })
+        
         const agentName = getSafeAgentName(data.agent)
         const responseText = getSafeResponseText(data.response)
+        // Check both chat_trigger and call_trigger since backend might use either
+        const chatTrigger = data.chat_trigger || data.call_trigger || false
         
-        // Update current agent
+        console.log("📩 WebSocket Message Processed:", {
+          chat_trigger_from_backend: data.chat_trigger,
+          call_trigger_from_backend: data.call_trigger,
+          final_chatTrigger_value: chatTrigger,
+          all_keys: Object.keys(data),
+          full_data: data,
+          raw_agent: data.agent,
+          normalized_agent: agentName
+        })
+        
+        // Update current agent only if it's different
+        // getSafeAgentName already handles null/triage_agent -> "Triage Agent" conversion
         if (agentName !== currentAgent) {
           setCurrentAgent(agentName)
           
@@ -370,6 +633,7 @@ export default function Home() {
           sender: "assistant",
           timestamp: new Date(),
           isStreaming: true,
+          chat_trigger: chatTrigger,
         }
         
         setMessages((prev) => [...prev, newMessage])
@@ -402,11 +666,11 @@ export default function Home() {
         err.response?.data?.detail || 
         err.response?.data?.message ||
         err.message || 
-        "Failed to start chat session"
+        t.failedToStartChat
       
       // Show detailed error in alert
       const statusCode = err.response?.status ? ` (Status: ${err.response.status})` : ''
-      alert(`Failed to start chat session${statusCode}: ${errorMessage}`)
+      alert(`${t.failedToStartChat}${statusCode}: ${errorMessage}`)
     }
   }
 
@@ -572,11 +836,11 @@ export default function Home() {
   // Add single bridging text that cycles through states
   const addBridgingMessages = () => {
     const bridgingMessages = [
-      "Thinking...",
-      "Processing request...",
-      "Analyzing context...",
-      "Routing to appropriate agent...",
-      "Calling necessary tools...",
+      t.thinking,
+      t.processing,
+      t.analyzing,
+      t.routing,
+      t.callingTools,
     ]
 
     let currentIndex = 0
@@ -626,7 +890,7 @@ export default function Home() {
   const streamText = (text: string, messageId: string, onComplete?: () => void) => {
     const chars = text.split("")
     let currentIndex = 0
-    const streamSpeed = 15 // Fast streaming (lower = faster)
+    const streamSpeed = 5 // Fast streaming (lower = faster)
 
     const streamInterval = setInterval(() => {
       if (currentIndex < chars.length) {
@@ -677,7 +941,7 @@ export default function Home() {
   }
 
   const handleNewChat = async () => {
-    const confirmed = window.confirm("Doing this will delete the session. Do you want to continue?")
+    const confirmed = window.confirm(t.newChatConfirm)
     
     if (!confirmed) return
 
@@ -707,14 +971,14 @@ export default function Home() {
         error.response?.data?.error || 
         error.response?.data?.detail || 
         error.message || 
-        "Failed to start new chat"
-      alert(`Failed to start new chat: ${errorMessage}`)
+        t.failedToStartNewChat
+      alert(`${t.failedToStartNewChat}: ${errorMessage}`)
     }
   }
 
   const fetchMedicineStatusNotifications = async () => {
     if (!userId) {
-      setNotificationError("You need to be logged in to view notifications.")
+      setNotificationError(t.needToBeLoggedIn)
       setNotificationMessages([])
       setNotificationLoading(false)
       return
@@ -739,7 +1003,7 @@ export default function Home() {
         error.response?.data?.detail ||
         error.response?.data?.message ||
         error.message ||
-        "Unable to fetch notifications."
+        t.unableToFetch
       setNotificationError(message)
       setNotificationMessages([])
     } finally {
@@ -758,6 +1022,58 @@ export default function Home() {
     setNotificationError(null)
     setNotificationLoading(true)
     await fetchMedicineStatusNotifications()
+  }
+
+  const handleInitiateAppointment = async () => {
+    console.log("🚀 Initiating appointment call for user:", userId)
+    
+    if (!userId) {
+      alert(t.userIdNotFound)
+      return
+    }
+
+    try {
+      console.log("⚙️ Setting localTrigger to false")
+      setLocalTrigger(false) // Hide the button immediately
+      setAppointmentCallStatus(t.processingStatus)
+      
+      // Call the initiate-appointment endpoint
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+      await axios.post(
+        `${apiUrl}/initiate-appointment/`,
+        { user_id: parseInt(userId) },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+      
+      setAppointmentCallStatus(t.voiceAgentCalled)
+      
+      // Clear the success message after 5 seconds
+      setTimeout(() => {
+        setAppointmentCallStatus(null)
+      }, 5000)
+    } catch (error: any) {
+      console.error("Appointment initiation error:", error)
+      const errorMessage = 
+        error.response?.data?.error || 
+        error.response?.data?.detail || 
+        error.message || 
+        t.failedToInitiate
+      alert(`${t.failedToInitiate}: ${errorMessage}`)
+      setLocalTrigger(true) // Re-show the button if there's an error
+      setAppointmentCallStatus(null)
+    }
+  }
+
+  const handleDegradeMode = () => {
+    const confirmed = window.confirm("This is an offline mode and all the features except chat will be turned off")
+    if (confirmed) {
+      router.push("/degradechat")
+    }
   }
 
   const handleLogout = async () => {
@@ -807,42 +1123,53 @@ export default function Home() {
       </div>
       <div className="relative mx-auto flex h-full max-h-full max-w-[1920px] flex-col gap-4 overflow-hidden lg:gap-6 z-10">
         {/* Header with New Chat and Logout */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between relative z-50">
           <div className="flex items-center gap-2">
             <img src="/sehat-link-logo.svg" width={32} height={32} alt="Sehat Link" />
-            <h1 className="text-xl font-bold text-n-1">Sehat Link</h1>
+            <h1 className={`text-xl font-bold text-n-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.sehatLink}</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+            <Button
+              onClick={() => setLanguage(language === "en" ? "ur" : "en")}
+              variant="outline"
+              className={`flex items-center gap-2 border-color-1/50 bg-color-1/10 text-color-1 hover:bg-color-1/20 hover:text-color-1 backdrop-blur-sm shadow-lg shadow-color-1/20 ${language === "ur" ? "font-urdu" : ""}`}
+              style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}
+              title={language === "en" ? "اردو میں تبدیل کریں" : "Switch to English"}
+            >
+              <Languages className="h-4 w-4" />
+              {language === "en" ? "اردو" : "English"}
+            </Button>
             <div className="relative" ref={notificationsRef}>
               <Button
                 onClick={handleNotificationsClick}
                 variant="outline"
-                className="flex items-center gap-2 border-n-6 bg-n-7/50 text-n-1 hover:bg-n-7 hover:text-color-1 backdrop-blur-sm"
+                className={`flex items-center gap-2 border-color-1/50 bg-color-1/10 text-color-1 hover:bg-color-1/20 hover:text-color-1 backdrop-blur-sm shadow-lg shadow-color-1/20 ${language === "ur" ? "font-urdu" : ""}`}
+                style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}
               >
                 <Bell className="h-4 w-4" />
-                Notifications
+                {t.followUps}
               </Button>
               {isNotificationsOpen && (
-                <div className="absolute right-0 mt-2 w-72 rounded-lg border border-n-6 bg-n-8/95 backdrop-blur-xl shadow-2xl z-20">
+                <div className="absolute right-0 mt-2 w-72 rounded-lg border border-n-6 bg-n-8/95 backdrop-blur-xl shadow-2xl z-[100]">
                   <div className="border-b border-n-6/60 px-4 py-3">
-                    <p className="text-sm font-semibold text-n-1">Medicine Follow-up</p>
-                    <p className="text-xs text-n-4">Latest adherence insights</p>
+                    <p className={`text-sm font-semibold text-n-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.medicineFollowUp}</p>
+                    <p className={`text-xs text-n-4 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.latestInsights}</p>
                   </div>
                   <div className="max-h-72 overflow-y-auto px-4 py-3 space-y-3">
                     {notificationLoading && (
-                      <div className="flex items-center gap-2 text-n-3 text-sm">
+                      <div className={`flex items-center gap-2 text-n-3 text-sm ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Fetching notifications...
+                        {t.fetchingNotifications}
                       </div>
                     )}
                     {!notificationLoading && notificationError && (
-                      <div className="flex items-start gap-2 text-xs text-red-300">
+                      <div className={`flex items-start gap-2 text-xs text-red-300 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
                         <AlertCircle className="h-4 w-4 mt-0.5" />
                         <span>{notificationError}</span>
                       </div>
                     )}
                     {!notificationLoading && !notificationError && notificationMessages.length === 0 && (
-                      <p className="text-sm text-n-4">You&apos;re all caught up. No new alerts.</p>
+                      <p className={`text-sm text-n-4 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.allCaughtUp}</p>
                     )}
                     {!notificationLoading &&
                       !notificationError &&
@@ -861,18 +1188,31 @@ export default function Home() {
             <Button
               onClick={handleNewChat}
               variant="outline"
-              className="flex items-center gap-2 border-n-6 bg-n-7/50 text-n-1 hover:bg-n-7 hover:text-color-1 backdrop-blur-sm"
+              className={`flex items-center gap-2 border-color-1/50 bg-color-1/10 text-color-1 hover:bg-color-1/20 hover:text-color-1 backdrop-blur-sm shadow-lg shadow-color-1/20 ${language === "ur" ? "font-urdu" : ""}`}
+              style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}
             >
               <MessageSquarePlus className="h-4 w-4" />
-              New Chat
+              {t.newChat}
             </Button>
+            <Button
+              onClick={handleDegradeMode}
+              variant="outline"
+              className={`flex items-center gap-2 border-n-6/50 bg-n-7/30 text-n-3 hover:bg-n-7/50 hover:text-n-2 backdrop-blur-sm shadow-lg ${language === "ur" ? "font-urdu" : ""}`}
+              style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}
+            >
+              <WifiOff className="h-4 w-4" />
+              Degrade Mode
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
             <Button
               onClick={handleLogout}
               variant="outline"
-              className="flex items-center gap-2 border-n-6 bg-n-7/50 text-n-1 hover:bg-n-7 hover:text-color-1 backdrop-blur-sm"
+              className={`flex items-center gap-2 border-n-6 bg-n-7/50 text-n-1 hover:bg-n-7 hover:text-color-1 backdrop-blur-sm ${language === "ur" ? "font-urdu" : ""}`}
+              style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              {t.logout}
             </Button>
           </div>
         </div>
@@ -885,7 +1225,80 @@ export default function Home() {
           transition={{ duration: 0.5 }}
           className="col-span-1 flex h-full flex-col gap-4 overflow-y-auto md:col-span-3"
         >
-          
+          {/* Appointments List */}
+          <Card className="border-n-6 bg-n-7/50 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className={`text-lg flex items-center gap-2 text-n-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
+                <Calendar className="h-5 w-5" />
+                {t.myAppointments}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {appointmentsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-n-4" />
+                </div>
+              ) : appointments.length === 0 ? (
+                <p className={`text-sm text-n-4 text-center py-4 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.noCompletedAppointments}</p>
+              ) : (
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2">
+                    {appointments.map((appointment) => (
+                      <motion.div
+                        key={appointment.id}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <Card
+                          className="border-n-6 bg-n-8/50 cursor-pointer hover:bg-n-7/70 transition-colors"
+                          onClick={() => {
+                            setSelectedAppointment(appointment)
+                            setIsAppointmentModalOpen(true)
+                          }}
+                        >
+                          <CardContent className="p-4">
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className={`text-sm font-semibold text-n-1 line-clamp-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
+                                    {appointment.doctors?.name || (language === "en" ? "Doctor" : "ڈاکٹر")}
+                                  </p>
+                                  {appointment.doctors?.specialization && (
+                                    <p className={`text-xs text-n-4 mt-0.5 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
+                                      {appointment.doctors.specialization}
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge variant="outline" className={`bg-color-1/10 border-color-1/30 text-color-1 text-xs ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
+                                  {t.completed}
+                                </Badge>
+                              </div>
+                              {appointment.appointment_date && (
+                                <p className="text-xs text-n-3">
+                                  {new Date(appointment.appointment_date).toLocaleDateString()}
+                                  {appointment.appointment_time && ` • ${appointment.appointment_time}`}
+                                </p>
+                              )}
+                              {appointment.chief_complaint && (
+                                <p className={`text-xs text-n-4 line-clamp-2 mt-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>
+                                  {appointment.chief_complaint}
+                                </p>
+                              )}
+                              {appointment.diagnosis && !appointment.chief_complaint && (
+                                <p className={`text-xs text-n-4 line-clamp-2 mt-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>
+                                  {appointment.diagnosis}
+                                </p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Medicine Reminders */}
           <MedicineReminderCard />
@@ -974,32 +1387,129 @@ export default function Home() {
                                         textShadow: `0 0 10px ${agentInfo.color}40`,
                                       }}
                                     >
-                                      {message.agent}
+                                      {agentInfo.name}
                                     </span>
                                   </div>
                                 )}
-                                <div className="flex items-start gap-2">
-                                  <p className="text-sm leading-relaxed font-medium flex-1">
-                                    {message.text}
-                                    {isStreaming && (
-                                      <motion.span
-                                        className="inline-block w-0.5 h-4 ml-1 bg-color-1"
-                                        animate={{ opacity: [1, 0, 1] }}
-                                        transition={{
-                                          duration: 0.8,
-                                          repeat: Infinity,
-                                          ease: "easeInOut",
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex items-start gap-2">
+                                    <div className={`text-sm leading-relaxed font-medium flex-1 prose prose-invert prose-sm max-w-none whitespace-pre-wrap ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>
+                                      <ReactMarkdown
+                                        components={{
+                                          p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                                          strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                                          em: ({ children }) => <em className="italic">{children}</em>,
+                                          code: ({ children, className }) => {
+                                            const isInline = !className
+                                            return isInline ? (
+                                              <code className="bg-n-8/80 px-1.5 py-0.5 rounded text-xs font-mono">
+                                                {children}
+                                              </code>
+                                            ) : (
+                                              <code className="block bg-n-8/80 p-3 rounded text-xs font-mono whitespace-pre overflow-x-auto">
+                                                {children}
+                                              </code>
+                                            )
+                                          },
+                                          pre: ({ children }) => (
+                                            <pre className="bg-n-8/80 p-3 rounded text-xs font-mono whitespace-pre overflow-x-auto mb-2 last:mb-0">
+                                              {children}
+                                            </pre>
+                                          ),
+                                          ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                                          ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                                          li: ({ children }) => <li className="ml-4">{children}</li>,
+                                          blockquote: ({ children }) => (
+                                            <blockquote className="border-l-4 border-n-6 pl-4 italic mb-2">
+                                              {children}
+                                            </blockquote>
+                                          ),
+                                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                                          h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                                          h3: ({ children }) => <h3 className="text-sm font-bold mb-2">{children}</h3>,
+                                          hr: () => <hr className="my-2 border-n-6" />,
                                         }}
-                                        style={{
-                                          backgroundColor: agentInfo?.color || "#ac6aff",
-                                          boxShadow: `0 0 8px ${agentInfo?.color || "#ac6aff"}80`,
-                                        }}
-                                      />
-                                    )}
-                                  </p>
+                                      >
+                                        {message.text}
+                                      </ReactMarkdown>
+                                      {isStreaming && (
+                                        <motion.span
+                                          className="inline-block w-0.5 h-4 ml-1 bg-color-1"
+                                          animate={{ opacity: [1, 0, 1] }}
+                                          transition={{
+                                            duration: 0.8,
+                                            repeat: Infinity,
+                                            ease: "easeInOut",
+                                          }}
+                                          style={{
+                                            backgroundColor: agentInfo?.color || "#ac6aff",
+                                            boxShadow: `0 0 8px ${agentInfo?.color || "#ac6aff"}80`,
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Show button only if chat_trigger and localTrigger are both true */}
+                                  {(() => {
+                                    const shouldShowButton = message.sender === "assistant" && message.chat_trigger && localTrigger && !isStreaming;
+                                    
+                                    console.log("🔘 Button Visibility Check:", {
+                                      messageId: message.id,
+                                      sender: message.sender,
+                                      chat_trigger: message.chat_trigger,
+                                      localTrigger: localTrigger,
+                                      isStreaming: isStreaming,
+                                      shouldShowButton: shouldShowButton,
+                                      agent: message.agent
+                                    });
+                                    
+                                    return shouldShowButton ? (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                      >
+                                        <Button
+                                          onClick={handleInitiateAppointment}
+                                          className={`w-full bg-gradient-to-r from-color-1 to-color-2 text-n-8 hover:opacity-90 font-semibold text-sm py-2 shadow-lg ${language === "ur" ? "font-urdu" : ""}`}
+                                          style={{
+                                            boxShadow: `0 0 20px ${agentInfo?.color || "#ac6aff"}40`,
+                                            fontFamily: language === "ur" ? "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" : undefined,
+                                          }}
+                                        >
+                                          {t.allowAgentCall}
+                                        </Button>
+                                      </motion.div>
+                                    ) : null;
+                                  })()}
+                                  {/* Show appointment call status message */}
+                                  {message.sender === "assistant" && appointmentCallStatus && !isStreaming && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: -5 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      transition={{ duration: 0.3 }}
+                                      className={`flex items-center gap-2 text-sm text-color-1 font-medium ${language === "ur" ? "font-urdu" : ""}`}
+                                      style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}
+                                    >
+                                      <svg 
+                                        className="h-4 w-4" 
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path 
+                                          strokeLinecap="round" 
+                                          strokeLinejoin="round" 
+                                          strokeWidth={2} 
+                                          d="M5 13l4 4L19 7" 
+                                        />
+                                      </svg>
+                                      {appointmentCallStatus}
+                                    </motion.div>
+                                  )}
                                 </div>
                                 {!isBridging && (
-                                  <p className={`mt-2 text-xs ${message.sender === "user" ? "text-n-8/70" : "text-n-3"}`}>
+                                  <p className={`mt-2 text-xs ${message.sender === "user" ? "text-n-8/70" : "text-n-3"} ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
                                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                   </p>
                                 )}
@@ -1026,7 +1536,7 @@ export default function Home() {
                           exit={{ opacity: 0 }}
                           className="flex justify-start px-2 py-1"
                         >
-                          <p className="text-sm text-n-4 italic font-light">
+                          <p className={`text-sm text-n-4 italic font-light ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
                             {bridgingText}
                           </p>
                         </motion.div>
@@ -1066,9 +1576,11 @@ export default function Home() {
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Type your message..."
-                    className="w-full border-n-6 bg-n-9/60 backdrop-blur text-n-1 placeholder:text-n-4 focus-visible:border-color-1 focus-visible:shadow-lg focus-visible:shadow-color-1/20 transition-all duration-300"
+                    placeholder={t.typeMessage}
+                    className={`w-full border-n-6 bg-n-9/60 backdrop-blur text-n-1 placeholder:text-n-4 focus-visible:border-color-1 focus-visible:shadow-lg focus-visible:shadow-color-1/20 transition-all duration-300 ${language === "ur" ? "font-urdu" : ""}`}
                     style={{
+                      fontFamily: language === "ur" ? "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" : undefined,
+                      direction: language === "ur" ? "rtl" : "ltr",
                       boxShadow: inputValue ? "0 0 20px rgba(121, 255, 247, 0.1)" : "none",
                     }}
                   />
@@ -1216,6 +1728,11 @@ export default function Home() {
                             >
                               {agentInfo.name}
                             </p>
+                            {agentInfo.subtitle && (
+                              <p className="text-xs text-n-4 mt-0.5">
+                                {agentInfo.subtitle}
+                              </p>
+                            )}
                             {isActive && agentInfo.lastActive && (
                               <p className="text-xs text-n-4 mt-1">
                                 Active now
@@ -1268,7 +1785,12 @@ export default function Home() {
                           >
                             {activeAgents.get(currentAgent)?.name}
                           </h3>
-                          <p className="text-xs text-n-4">
+                          {activeAgents.get(currentAgent)?.subtitle && (
+                            <p className="text-xs text-n-4 mt-0.5">
+                              {activeAgents.get(currentAgent)?.subtitle}
+                            </p>
+                          )}
+                          <p className="text-xs text-n-4 mt-1">
                             Currently processing
                           </p>
                         </div>
@@ -1285,6 +1807,268 @@ export default function Home() {
         </motion.div>
       </div>
       </div>
+
+      {/* Appointment Details Modal */}
+      <AnimatePresence>
+        {isAppointmentModalOpen && selectedAppointment && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsAppointmentModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-lg border border-n-6 bg-n-8 shadow-2xl"
+            >
+              <Card className="border-0 bg-transparent">
+                <CardHeader className="border-b border-n-6 bg-n-7/50">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className={`text-xl flex items-center gap-2 text-n-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
+                      <FileText className="h-5 w-5" />
+                      {t.appointmentDetails}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsAppointmentModalOpen(false)}
+                      className="text-n-4 hover:text-n-1"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                  <ScrollArea className="h-full">
+                    <div className="space-y-6">
+                      {/* Doctor Information */}
+                      <div>
+                        <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.doctorInformation}</h3>
+                        <div className="space-y-1">
+                          <p className={`text-base font-semibold text-n-1 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>
+                            {selectedAppointment.doctors?.name || "N/A"}
+                          </p>
+                          {selectedAppointment.doctors?.specialization && (
+                            <p className={`text-sm text-n-4 ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{selectedAppointment.doctors.specialization}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <Separator className="bg-n-6" />
+
+                      {/* Appointment Date & Time */}
+                      <div>
+                        <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.dateTime}</h3>
+                        <div className="space-y-1">
+                          {selectedAppointment.appointment_date && (
+                            <p className="text-sm text-n-1">
+                              {t.date}: {new Date(selectedAppointment.appointment_date).toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          )}
+                          {selectedAppointment.appointment_time && (
+                            <p className="text-sm text-n-1">{language === "en" ? "Time" : "وقت"}: {selectedAppointment.appointment_time}</p>
+                          )}
+                          {selectedAppointment.completed_at && (
+                            <p className="text-xs text-n-4 mt-1">
+                              {t.completed}: {new Date(selectedAppointment.completed_at).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <Separator className="bg-n-6" />
+
+                      {/* Chief Complaint */}
+                      {selectedAppointment.chief_complaint && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.chiefComplaint}</h3>
+                            <p className={`text-sm text-n-1 leading-relaxed ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>{selectedAppointment.chief_complaint}</p>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Symptoms */}
+                      {selectedAppointment.symptoms && Array.isArray(selectedAppointment.symptoms) && selectedAppointment.symptoms.length > 0 && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.symptoms}</h3>
+                            <div className="space-y-2">
+                              {selectedAppointment.symptoms.map((symptom: any, index: number) => (
+                                <div key={index} className="p-3 rounded-lg border border-n-6 bg-n-9/40">
+                                  <p className="text-sm font-medium text-n-1">{symptom.name || `${language === "en" ? "Symptom" : "علامت"} ${index + 1}`}</p>
+                                  {symptom.severity && (
+                                    <p className="text-xs text-n-4 mt-1">{t.severity}: {symptom.severity}</p>
+                                  )}
+                                  {symptom.duration && (
+                                    <p className="text-xs text-n-4">{t.duration}: {symptom.duration}</p>
+                                  )}
+                                  {symptom.notes && (
+                                    <p className="text-xs text-n-3 mt-1">{symptom.notes}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Diagnosis */}
+                      {selectedAppointment.diagnosis && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.diagnosis}</h3>
+                            <p className={`text-sm text-n-1 leading-relaxed ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>{selectedAppointment.diagnosis}</p>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Examination Findings */}
+                      {selectedAppointment.examination_findings && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.examinationFindings}</h3>
+                            <p className={`text-sm text-n-1 leading-relaxed ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>{selectedAppointment.examination_findings}</p>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Vital Signs */}
+                      {selectedAppointment.vital_signs && typeof selectedAppointment.vital_signs === 'object' && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.vitalSigns}</h3>
+                            <div className="grid grid-cols-2 gap-2">
+                              {selectedAppointment.vital_signs.blood_pressure && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">{t.bloodPressure}</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.blood_pressure}</p>
+                                </div>
+                              )}
+                              {selectedAppointment.vital_signs.heart_rate && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">{t.heartRate}</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.heart_rate}</p>
+                                </div>
+                              )}
+                              {selectedAppointment.vital_signs.temperature && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">{t.temperature}</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.temperature}</p>
+                                </div>
+                              )}
+                              {selectedAppointment.vital_signs.weight && (
+                                <div className="p-2 rounded border border-n-6 bg-n-9/40">
+                                  <p className="text-xs text-n-4">{t.weight}</p>
+                                  <p className="text-sm text-n-1">{selectedAppointment.vital_signs.weight}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Prescription */}
+                      {selectedAppointment.prescription && Array.isArray(selectedAppointment.prescription) && selectedAppointment.prescription.length > 0 && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.prescription}</h3>
+                            <div className="space-y-2">
+                              {selectedAppointment.prescription.map((med: any, index: number) => (
+                                <div key={index} className="p-3 rounded-lg border border-n-6 bg-n-9/40">
+                                  <p className="text-sm font-medium text-n-1">{med.medication || `${t.medication} ${index + 1}`}</p>
+                                  <div className="mt-2 space-y-1">
+                                    {med.dosage && (
+                                      <p className="text-xs text-n-4">{t.dosage}: {med.dosage}</p>
+                                    )}
+                                    {med.frequency && (
+                                      <p className="text-xs text-n-4">{t.frequency}: {med.frequency}</p>
+                                    )}
+                                    {med.duration && (
+                                      <p className="text-xs text-n-4">{t.duration}: {med.duration}</p>
+                                    )}
+                                    {med.instructions && (
+                                      <p className="text-xs text-n-3 mt-1">{med.instructions}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Lab Tests */}
+                      {selectedAppointment.lab_tests && Array.isArray(selectedAppointment.lab_tests) && selectedAppointment.lab_tests.length > 0 && (
+                        <>
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.labTests}</h3>
+                            <div className="space-y-2">
+                              {selectedAppointment.lab_tests.map((test: any, index: number) => (
+                                <div key={index} className="p-3 rounded-lg border border-n-6 bg-n-9/40">
+                                  <p className="text-sm font-medium text-n-1">{test.test_name || `${t.testName} ${index + 1}`}</p>
+                                  {test.reason && (
+                                    <p className="text-xs text-n-4 mt-1">{t.reason}: {test.reason}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <Separator className="bg-n-6" />
+                        </>
+                      )}
+
+                      {/* Follow-up */}
+                      {(selectedAppointment.follow_up_date || selectedAppointment.follow_up_notes) && (
+                        <div>
+                          <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.followUp}</h3>
+                          <div className="space-y-1">
+                            {selectedAppointment.follow_up_date && (
+                              <p className="text-sm text-n-1">
+                                {t.date}: {new Date(selectedAppointment.follow_up_date).toLocaleDateString()}
+                              </p>
+                            )}
+                            {selectedAppointment.follow_up_notes && (
+                              <p className="text-sm text-n-1 leading-relaxed mt-2">{selectedAppointment.follow_up_notes}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Transcription */}
+                      {selectedAppointment.transcription && (
+                        <>
+                          <Separator className="bg-n-6" />
+                          <div>
+                            <h3 className={`text-sm font-semibold text-n-3 mb-2 uppercase tracking-wide ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif" } : {}}>{t.transcription}</h3>
+                            <p className={`text-sm text-n-2 leading-relaxed whitespace-pre-wrap ${language === "ur" ? "font-urdu" : ""}`} style={language === "ur" ? { fontFamily: "'Noto Nastaliq Urdu', 'Noto Sans Arabic', sans-serif", direction: "rtl" } : { direction: "ltr" }}>{selectedAppointment.transcription}</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   )
 }
